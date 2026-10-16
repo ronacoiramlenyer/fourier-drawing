@@ -859,6 +859,7 @@ function layoutChains() {
   cX.hub = [off[0], off[1] + hy + AXIS_GAP + Rx];   // X chain above the figure
   cY.hub = [off[0] - hx - AXIS_GAP - Ry, off[1]];   // Y chain left of the figure
   const minX = cY.hub[0] - Ry, maxX = off[0] + hx, minY = off[1] - hy, maxY = cX.hub[1] + Rx;
+  S.figBox = { minX: off[0] - hx, maxX, minY, maxY: off[1] + hy };
   S.cx = (minX + maxX) / 2; S.cy = (minY + maxY) / 2;
   S.layoutExtent = Math.max((maxX - minX) / 2, (maxY - minY) / 2, 120) * 1.04;
 }
@@ -1209,13 +1210,22 @@ function draw() {
   else if (S.chains[0].kind === 'z') pen = tips[0];
   else {
     pen = [tips[0][0], tips[1][1]];
-    // Guides: the X tip sets the pen's x, the Y tip sets its y
+    // Guides: a vertical line from the X tip and a horizontal line from the Y tip run
+    // straight across the figure; they cross exactly at the pen.
     const pp = toScreen(pen[0], pen[1], s), px = toScreen(...tips[0], s), py = toScreen(...tips[1], s);
+    const fb = S.figBox, pad = 14 / s;
+    const vEnd = toScreen(tips[0][0], Math.min(fb.minY, pen[1]) - pad, s);
+    const hEnd = toScreen(Math.max(fb.maxX, pen[0]) + pad, tips[1][1], s);
     ctx.save();
-    ctx.setLineDash([4, 5]); ctx.lineWidth = 1.2;
-    ctx.strokeStyle = 'rgba(95, 211, 234, 0.75)';
+    ctx.lineWidth = 1.1;
+    ctx.strokeStyle = 'rgba(95, 211, 234, 0.32)';
+    ctx.beginPath(); ctx.moveTo(px[0], px[1]); ctx.lineTo(vEnd[0], vEnd[1]); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255, 126, 182, 0.32)';
+    ctx.beginPath(); ctx.moveTo(py[0], py[1]); ctx.lineTo(hEnd[0], hEnd[1]); ctx.stroke();
+    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = 'rgba(95, 211, 234, 0.8)';
     ctx.beginPath(); ctx.moveTo(px[0], px[1]); ctx.lineTo(pp[0], pp[1]); ctx.stroke();
-    ctx.strokeStyle = 'rgba(255, 126, 182, 0.75)';
+    ctx.strokeStyle = 'rgba(255, 126, 182, 0.8)';
     ctx.beginPath(); ctx.moveTo(py[0], py[1]); ctx.lineTo(pp[0], pp[1]); ctx.stroke();
     ctx.restore();
     for (const [q, col] of [[px, '#5fd3ea'], [py, '#ff7eb6']]) { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(q[0], q[1], 3.5, 0, TAU); ctx.fill(); }
@@ -1450,7 +1460,7 @@ function renderAxesUI() {
   $('axes-xy').setAttribute('aria-checked', String(S.axes === 'xy'));
   $('axes-note').innerHTML = S.axes === 'complex'
     ? 'One chain of rotating arrows in the complex plane. The pen is the tip of the chain.'
-    : 'Two independent chains. The top chain sets the pen’s <b>x</b>, the left chain sets its <b>y</b>; the dashed guides carry each tip to the pen. Unequal frequencies on the two axes make Lissajous figures.';
+    : 'Two independent chains. The top chain sets the pen’s <b>x</b>, the left chain sets its <b>y</b>. A vertical line from the top chain and a horizontal line from the left chain cross exactly at the pen. Unequal frequencies on the two axes make Lissajous figures.';
 }
 function setAxes(a) {
   if (S.axes === a) return;
