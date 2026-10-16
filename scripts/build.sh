@@ -9,4 +9,5 @@ cd "$(dirname "$0")/.."
   cat src/studio.html
   printf '\n</body>\n</html>\n'
 } > index.html
-echo "Built index.html"
+mkdir -p dist && cp index.html dist/index.html
+echo "Built index.html and dist/index.html"

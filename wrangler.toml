@@ -1,0 +1,6 @@
+# Cloudflare Workers static site: "Fourier Studio"
+name = "fourier-studio"
+compatibility_date = "2025-09-01"
+
+[assets]
+directory = "./dist"

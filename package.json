@@ -1,0 +1,9 @@
+{
+  "name": "fourier-studio",
+  "private": true,
+  "description": "Fourier Studio: explore epicycles and trace drawings and photos with the DFT",
+  "scripts": {
+    "build": "sh scripts/build.sh",
+    "deploy": "sh scripts/build.sh && npx --yes wrangler@4.40.0 deploy"
+  }
+}

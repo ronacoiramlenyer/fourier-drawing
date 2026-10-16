@@ -280,7 +280,12 @@ input[type="range"]::-moz-range-thumb {
   color: var(--muted);
   font-weight: 500;
 }
-.seg button[aria-selected="true"] { background: var(--raise-2); color: var(--text); }
+.seg button[aria-selected="true"], .seg button[aria-checked="true"] { background: var(--raise-2); color: var(--text); }
+.seg.small button { padding: 7px 6px; font-size: 13px; }
+.group-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.group-head h3 { margin: 0; font-size: 13px; font-weight: 600; }
+.group-head span { font-size: 12px; color: var(--faint); }
+.formula .line + .line { margin-top: 2px; }
 .section { display: flex; flex-direction: column; gap: 10px; }
 .section h2 {
   margin: 0;
@@ -545,6 +550,15 @@ details.inner > div { margin-top: 8px; font-size: 13px; color: var(--muted); dis
         <button role="tab" id="tab-trace" aria-selected="false" aria-controls="pane-trace">Trace a Drawing</button>
       </div>
 
+      <div class="section">
+        <h2>Circle layout</h2>
+        <div class="seg small" role="radiogroup" aria-label="Circle layout">
+          <button role="radio" id="axes-complex" aria-checked="true">One chain (complex plane)</button>
+          <button role="radio" id="axes-xy" aria-checked="false">Separate X and Y</button>
+        </div>
+        <p class="note" id="axes-note"></p>
+      </div>
+
       <!-- Build mode -->
       <div id="pane-build" role="tabpanel" aria-labelledby="tab-build" class="section" style="gap:18px">
         <div class="section">
@@ -555,11 +569,8 @@ details.inner > div { margin-top: 8px; font-size: 13px; color: var(--muted); dis
         <div class="section">
           <h2>Circles <small id="circle-count"></small></h2>
           <p class="note">Each circle is centered on the tip of the previous arm. Frequency is the number of full turns per cycle; a negative value turns clockwise.</p>
-          <div class="circle-list" id="circle-list"></div>
-          <div class="tgroup" style="justify-content:space-between;flex-wrap:wrap">
-            <button class="btn" id="add-circle">+ Add circle</button>
-            <label class="toggle"><input type="checkbox" id="fractional"> Allow fractional frequencies</label>
-          </div>
+          <div class="section" id="circle-groups" style="gap:16px"></div>
+          <label class="toggle"><input type="checkbox" id="fractional"> Allow fractional frequencies</label>
           <p class="note" id="period-note" hidden></p>
         </div>
       </div>
@@ -575,6 +586,31 @@ details.inner > div { margin-top: 8px; font-size: 13px; color: var(--muted); dis
             <button class="btn primary" id="convert" disabled>Convert to Circles</button>
           </div>
           <p class="note">The circles always trace a <b>closed loop</b>: after one cycle the pen returns to where it started. An open stroke gets a straight closing segment from its end back to its start, shown dashed in orange.</p>
+        </div>
+        <div class="section">
+          <h2>Trace a real object</h2>
+          <p class="note">Upload a photo of an object on a plain, contrasting background. The app finds the object’s outer edge and draws it in white over the photo. Adjust the threshold until the outline hugs the object, then convert. You can also trace over the photo by hand. On a phone or tablet, the picker can take a new photo.</p>
+          <div class="tgroup" style="flex-wrap:wrap">
+            <label class="btn" for="photo-input" id="photo-pick">Choose photo…</label>
+            <input type="file" id="photo-input" accept="image/*" hidden>
+            <button class="btn" id="photo-redetect" hidden>Use detected outline</button>
+            <button class="btn" id="photo-remove" hidden>Remove photo</button>
+          </div>
+          <div class="section" id="photo-controls" hidden>
+            <div class="ctl" style="grid-template-columns:74px minmax(0,1fr) 86px">
+              <label for="photo-thr">Threshold</label>
+              <input type="range" id="photo-thr" min="1" max="254" step="1" value="128">
+              <span class="num-wrap"><input type="number" id="photo-thr-n" min="1" max="254" step="1" value="128" aria-label="Threshold value"><span class="unit"></span></span>
+            </div>
+            <div class="tgroup" style="flex-wrap:wrap"><span class="note">Object is</span>
+              <div class="chips" id="photo-polarity">
+                <button class="chip" data-pol="auto" aria-pressed="true">Auto</button>
+                <button class="chip" data-pol="dark" aria-pressed="false">Darker than background</button>
+                <button class="chip" data-pol="light" aria-pressed="false">Lighter</button>
+              </div>
+            </div>
+          </div>
+          <p class="note" id="photo-status">You can also drop or paste an image onto the canvas.</p>
         </div>
         <div class="section" id="components-section">
           <h2>Fourier components <small id="k-label"></small></h2>
@@ -598,6 +634,7 @@ details.inner > div { margin-top: 8px; font-size: 13px; color: var(--muted); dis
           <label class="toggle"><input type="checkbox" id="show-arms" checked> Arms</label>
           <label class="toggle" id="show-outline-label"><input type="checkbox" id="show-outline" checked> Original outline</label>
           <label class="toggle"><input type="checkbox" id="show-preview" checked> Preview of full curve</label>
+          <label class="toggle disabled" id="show-photo-label"><input type="checkbox" id="show-photo" checked disabled> Photo</label>
         </div>
       </div>
 
@@ -625,6 +662,7 @@ details.inner > div { margin-top: 8px; font-size: 13px; color: var(--muted); dis
             <li><b>Frequency</b> is the number of rotations per cycle. Its sign sets the direction: positive turns counter-clockwise, negative turns clockwise, 0 stands still.</li>
             <li><b>Phase</b> is the angle the arm points at when <span class="math">t = 0</span>.</li>
             <li><b>The pen position is the sum</b> of all the rotating arms, each one starting at the tip of the previous one.</li>
+            <li><b>Separate X and Y</b> splits the work between two chains: the top chain’s tip sets the pen’s x, the left chain’s tip sets its y. Each axis is then a sum of cosine or sine waves, and unequal frequencies on the two axes give Lissajous figures.</li>
             <li><b>Build with Circles</b> lets you explore sums of circular motions directly: choose the circles, see the figure.</li>
             <li><b>Trace a Drawing</b> runs the other way. It samples your outline at evenly spaced points, then the Discrete Fourier Transform finds the circles (radius, frequency, phase) whose sum passes through those points.</li>
             <li>Playback speed only changes how fast the clock <span class="math">t</span> runs. The figure itself depends only on the circles.</li>
@@ -653,10 +691,14 @@ const TAU = Math.PI * 2;
 const BASE_CYCLE_SECONDS = 8;     // one cycle at 1× speed
 const SPC = 2048;                 // cached curve samples per cycle
 const N_SAMPLES = 512;            // resampled outline points fed to the DFT
-const MAX_CIRCLES = 10;
+const MAX_CIRCLES = 10;           // one chain
+const MAX_AXIS_CIRCLES = 8;       // per axis in X/Y layout
 const BUILD_EXTENT = 220;         // world half-size shown at 100% zoom
 const TRACE_EXTENT = 230;
 const TRACE_HALF_SIZE = 180;      // outlines are scaled so their larger half-dimension is this
+const PHOTO_HALF_SIZE = 200;      // uploaded photos are placed to fit this half-size
+const PHOTO_MAX_PX = 420;         // photos are analysed at this resolution
+const AXIS_GAP = 36;              // world gap between the figure and the X/Y chains
 const SPEED_MIN = 0.1, SPEED_MAX = 5;
 const CIRCLE_COLORS = ['#5fd3ea', '#ff7eb6', '#a990ff', '#7ee08f', '#ff9f5f', '#6a95ff', '#45e0bd', '#ff6474', '#d6a4ff', '#b8e05a'];
 
@@ -673,6 +715,20 @@ const PRESETS = [
     note: 'Equal radii at f = 5 and f = −3 sum to 2·cos(4·2πt)·e^(i·2πt): the eight-petal rose r = cos 4θ.' },
   { id: 'rosette', label: 'Seven-fold rosette', circles: [[110, 1, 0], [55, -6, 90], [28, 8, 0], [16, -13, 45]],
     note: 'Four circles with f = 1, −6, 8, −13. Every frequency leaves remainder 1 when divided by 7, so shifting t by 1/7 rotates the whole figure by 1/7 of a turn: seven-fold symmetry.' },
+];
+
+// X/Y layout: x(t) = Σ r cos(2πft + φ) from the top chain, y(t) = Σ r sin(2πft + φ) from the left chain.
+const XY_PRESETS = [
+  { id: 'xy-circle', label: 'Circle', x: [[150, 1, 0]], y: [[150, 1, 0]],
+    note: 'x = 150·cos(2πt) and y = 150·sin(2πt): the same circle as one arm, split into its horizontal and vertical shadows. Change one frequency to break the circle.' },
+  { id: 'xy-eight', label: 'Figure-eight', x: [[150, 1, 0]], y: [[150, 2, 0]],
+    note: 'y oscillates twice for every oscillation of x (ratio 1 : 2), giving the figure-eight Lissajous curve.' },
+  { id: 'xy-32', label: 'Lissajous 3 : 2', x: [[150, 3, 0]], y: [[150, 2, 0]],
+    note: 'x = 150·cos(3·2πt), y = 150·sin(2·2πt). The frequency ratio 3 : 2 sets how many lobes appear along each axis.' },
+  { id: 'xy-54', label: 'Lissajous 5 : 4', x: [[150, 5, 0]], y: [[150, 4, 0]],
+    note: 'A 5 : 4 ratio weaves a denser net. Try changing the Y phase to watch the pattern twist.' },
+  { id: 'xy-square', label: 'Square from square waves', x: [[153, 1, 0], [51, 3, 180], [31, 5, 0], [22, 7, 180]], y: [[153, 1, 0], [51, 3, 0], [31, 5, 0], [22, 7, 0]],
+    note: 'Each axis carries the first four terms of a square wave, with radii ≈ 4·120/π × (1, 1/3, 1/5, 1/7). One coordinate holds near ±120 while the other switches, so the pen runs around a square. The ripples near the corners are the Gibbs phenomenon.' },
 ];
 
 const OUTLINES = [
@@ -706,29 +762,37 @@ const OUTLINES = [
 // ---------- State ----------
 const S = {
   mode: 'build',
+  axes: 'complex',       // 'complex' (one chain) or 'xy' (separate X and Y chains)
   circles: [],
+  circlesX: [],
+  circlesY: [],
   nextId: 1,
   fractional: false,
   activePreset: 'rosette',
+  activePresetXY: null,
   trace: {
     state: 'run',          // 'run' or 'draw'
     outline: null,         // { name, pts (normalized world coords), open }
     raw: [],               // stroke in progress / finished stroke in world coords
     stroking: false,
-    coeffs: [],            // non-zero frequency terms sorted by magnitude
+    coeffs: [],            // complex terms (f ≠ 0) sorted by magnitude
+    xComps: [], yComps: [],// real cosine terms for the X/Y layout, sorted by magnitude
     offset: { re: 0, im: 0 },
     energy: 0,
     size: 1,
     K: 24,
     activeOutline: 'heart',
+    photo: null,           // { img, url, w, h, u, gray, otsu, threshold, polarity }
+    photoXform: { cx: 0, cy: 0, k: 1 },
   },
   t: 0,
   trailStart: 0,
   playing: true,
   speed: 1,
-  show: { circles: true, arms: true, outline: true, preview: true },
+  show: { circles: true, arms: true, outline: true, preview: true, photo: true },
   zoom: 1, vx: 0, vy: 0,
-  comps: [], origin: [0, 0], period: 1, cache: null, cacheCount: 0,
+  chains: [], offset: [0, 0], cx: 0, cy: 0, layoutExtent: BUILD_EXTENT,
+  period: 1, cache: null, cacheCount: 0,
 };
 
 // ---------- DOM ----------
@@ -738,11 +802,10 @@ const ctx = canvas.getContext('2d');
 const stage = $('stage');
 let W = 0, H = 0, DPR = 1;
 
-// ---------- Math ----------
+// ---------- Formatting ----------
 function fmt(n, d = 0) {
   if (Math.abs(n) < 0.5 * 10 ** -d) n = 0;
-  const s = n.toFixed(d);
-  return s.replace('-', '−');
+  return n.toFixed(d).replace('-', '−');
 }
 function fmtTrim(n, d = 2) {
   let s = Number(n.toFixed(d)).toString();
@@ -750,69 +813,116 @@ function fmtTrim(n, d = 2) {
   return s.replace('-', '−');
 }
 
+// ---------- Chains ----------
 function computePeriod(comps) {
   for (let p = 1; p <= 20; p++) {
     if (comps.every(c => Math.abs(c.f * p - Math.round(c.f * p)) < 1e-6)) return p;
   }
   return 20;
 }
-
-function activeComps() {
+function chainComps(list) {
+  return list.filter(c => c.on && c.r > 0).map(c => ({ r: c.r, f: c.f, phi: c.p * Math.PI / 180, color: c.color }));
+}
+function rankColor(i, n, base) {
+  const u = n > 1 ? Math.log(i + 1) / Math.log(n) : 0;
+  return `hsl(${((base + 110 * u) % 360).toFixed(0)} 85% ${(70 - 10 * u).toFixed(0)}%)`;
+}
+function rankComps(list, K, base) {
+  return list.slice(0, K).map((c, i) => ({ r: c.r, f: c.f, phi: c.phi, color: rankColor(i, list.length, base) }));
+}
+function buildChains() {
   if (S.mode === 'build') {
-    return S.circles.filter(c => c.on && c.r > 0).map(c => ({ r: c.r, f: c.f, phi: c.p * Math.PI / 180, color: c.color, id: c.id }));
+    if (S.axes === 'complex') return [{ kind: 'z', comps: chainComps(S.circles) }];
+    return [{ kind: 'x', comps: chainComps(S.circlesX) }, { kind: 'y', comps: chainComps(S.circlesY) }];
   }
   const T = S.trace;
   if (T.state !== 'run') return [];
-  const n = T.coeffs.length;
-  return T.coeffs.slice(0, T.K).map((c, i) => {
-    const u = n > 1 ? Math.log(i + 1) / Math.log(n) : 0;
-    const hue = 190 + 120 * u;
-    return { r: c.r, f: c.f, phi: c.phi, color: `hsl(${hue.toFixed(0)} 85% ${(70 - 10 * u).toFixed(0)}%)` };
-  });
+  if (S.axes === 'complex') return [{ kind: 'z', comps: rankComps(T.coeffs, T.K, 190) }];
+  return [{ kind: 'x', comps: rankComps(T.xComps, T.K, 185) }, { kind: 'y', comps: rankComps(T.yComps, T.K, 300) }];
 }
-
-// Evaluate the curve over one full closing period using rotation recurrences.
-function computeCache() {
-  const P = S.period;
-  const M = SPC * P;
-  const arr = new Float64Array(2 * M);
-  const [ox, oy] = S.origin;
-  for (let j = 0; j < M; j++) { arr[2 * j] = ox; arr[2 * j + 1] = oy; }
-  for (const c of S.comps) {
-    const d = TAU * c.f / SPC;
-    const cd = Math.cos(d), sd = Math.sin(d);
-    let x = c.r * Math.cos(c.phi), y = c.r * Math.sin(c.phi);
-    for (let j = 0; j < M; j++) {
-      if ((j & 255) === 0) { // re-anchor periodically to avoid drift
-        const a = d * j + c.phi;
-        x = c.r * Math.cos(a); y = c.r * Math.sin(a);
-      }
-      arr[2 * j] += x; arr[2 * j + 1] += y;
-      const nx = x * cd - y * sd;
-      y = x * sd + y * cd; x = nx;
-    }
+const sumR = (ch) => ch.comps.reduce((a, c) => a + c.r, 0);
+function layoutChains() {
+  const ch = S.chains;
+  const off = S.mode === 'trace' ? [S.trace.offset.re, S.trace.offset.im] : [0, 0];
+  S.offset = off;
+  if (!ch.length || ch[0].kind === 'z') {
+    if (ch[0]) ch[0].hub = off;
+    S.cx = 0; S.cy = 0;
+    S.layoutExtent = S.mode === 'build' ? Math.max(BUILD_EXTENT, (ch[0] ? sumR(ch[0]) : 0) * 1.04) : TRACE_EXTENT;
+    return;
   }
-  S.cache = arr; S.cacheCount = M;
+  const [cX, cY] = ch;
+  const Rx = sumR(cX), Ry = sumR(cY);
+  // The figure stays inside off ± (Rx, Ry); in trace mode also keep room for the original outline.
+  const hx = Math.max(Rx, S.mode === 'trace' ? TRACE_HALF_SIZE : 40);
+  const hy = Math.max(Ry, S.mode === 'trace' ? TRACE_HALF_SIZE : 40);
+  cX.hub = [off[0], off[1] + hy + AXIS_GAP + Rx];   // X chain above the figure
+  cY.hub = [off[0] - hx - AXIS_GAP - Ry, off[1]];   // Y chain left of the figure
+  const minX = cY.hub[0] - Ry, maxX = off[0] + hx, minY = off[1] - hy, maxY = cX.hub[1] + Rx;
+  S.cx = (minX + maxX) / 2; S.cy = (minY + maxY) / 2;
+  S.layoutExtent = Math.max((maxX - minX) / 2, (maxY - minY) / 2, 120) * 1.04;
 }
-
-function evalAt(t) {
-  let x = S.origin[0], y = S.origin[1];
-  for (const c of S.comps) {
+function chainTip(ch, t) {
+  let x = ch.hub[0], y = ch.hub[1];
+  for (const c of ch.comps) {
     const a = TAU * c.f * t + c.phi;
     x += c.r * Math.cos(a); y += c.r * Math.sin(a);
   }
   return [x, y];
 }
-
-function normalize(pts) {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const [x, y] of pts) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
-  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-  const half = Math.max(maxX - minX, maxY - minY) / 2 || 1;
-  const k = TRACE_HALF_SIZE / half;
-  return pts.map(([x, y]) => [(x - cx) * k, (y - cy) * k]);
+function evalAt(t) {
+  const ch = S.chains;
+  if (!ch.length) return S.offset.slice();
+  if (ch[0].kind === 'z') return chainTip(ch[0], t);
+  return [chainTip(ch[0], t)[0], chainTip(ch[1], t)[1]];
+}
+function penBase() {
+  const ch = S.chains;
+  if (!ch.length) return S.offset;
+  if (ch[0].kind === 'z') return ch[0].hub;
+  return [ch[0].hub[0], ch[1].hub[1]];
 }
 
+// Evaluate the curve over one full closing period using rotation recurrences.
+function computeCache() {
+  const M = SPC * S.period;
+  const arr = new Float64Array(2 * M);
+  const [bx, by] = penBase();
+  for (let j = 0; j < M; j++) { arr[2 * j] = bx; arr[2 * j + 1] = by; }
+  for (const ch of S.chains) {
+    const useX = ch.kind !== 'y', useY = ch.kind !== 'x';
+    for (const c of ch.comps) {
+      const d = TAU * c.f / SPC;
+      const cd = Math.cos(d), sd = Math.sin(d);
+      let x = 0, y = 0;
+      for (let j = 0; j < M; j++) {
+        if ((j & 255) === 0) { // re-anchor periodically to avoid drift
+          const a = d * j + c.phi;
+          x = c.r * Math.cos(a); y = c.r * Math.sin(a);
+        }
+        if (useX) arr[2 * j] += x;
+        if (useY) arr[2 * j + 1] += y;
+        const nx = x * cd - y * sd;
+        y = x * sd + y * cd; x = nx;
+      }
+    }
+  }
+  S.cache = arr; S.cacheCount = M;
+}
+
+// ---------- Outline processing ----------
+function bbox(pts) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const [x, y] of pts) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
+  return { minX, minY, maxX, maxY };
+}
+function normalize(pts) {
+  const b = bbox(pts);
+  const cx = (b.minX + b.maxX) / 2, cy = (b.minY + b.maxY) / 2;
+  const half = Math.max(b.maxX - b.minX, b.maxY - b.minY) / 2 || 1;
+  const k = TRACE_HALF_SIZE / half;
+  return { pts: pts.map(([x, y]) => [(x - cx) * k, (y - cy) * k]), cx, cy, k };
+}
 function dedupe(pts) {
   const out = [];
   for (const p of pts) {
@@ -825,7 +935,6 @@ function dedupe(pts) {
   }
   return out;
 }
-
 // Evenly spaced points along the closed polyline (closing segment included).
 function resample(pts, N) {
   const n = pts.length;
@@ -847,7 +956,6 @@ function resample(pts, N) {
   }
   return out;
 }
-
 // X_k = (1/N) Σ z_n e^{-2πi k n / N},  k = −N/2 … N/2 − 1, so z_n = Σ X_k e^{2πi k n / N}.
 function dft(z) {
   const N = z.length;
@@ -869,12 +977,37 @@ function dft(z) {
   }
   return out;
 }
+// Split the complex spectrum into the real spectra of x and y.
+// DFT(x)_k = (Z_k + conj Z_−k)/2, DFT(y)_k = (Z_k − conj Z_−k)/(2i). For a real signal the ±k pair
+// combines into one cosine 2|X_k| cos(2πkt + arg X_k); y uses sin(… + 90°) to match the Y chain.
+function splitXY(coeffs, N) {
+  const byF = new Map(coeffs.map(c => [c.f, c]));
+  const half = N / 2;
+  const xs = [], ys = [];
+  for (let k = 1; k <= half; k++) {
+    let Xr, Xi, Yr, Yi, w;
+    if (k < half) {
+      const p = byF.get(k), m = byF.get(-k);
+      Xr = (p.re + m.re) / 2; Xi = (p.im - m.im) / 2;
+      const dr = (p.re - m.re) / 2, di = (p.im + m.im) / 2;
+      Yr = di; Yi = -dr; w = 2;
+    } else {
+      const m = byF.get(-half);
+      Xr = m.re; Xi = 0; Yr = m.im; Yi = 0; w = 1;
+    }
+    const rx = w * Math.hypot(Xr, Xi), ry = w * Math.hypot(Yr, Yi);
+    xs.push({ f: k, r: rx, phi: Math.atan2(Xi, Xr), e: rx * rx / w });
+    ys.push({ f: k, r: ry, phi: Math.atan2(Yi, Yr) + Math.PI / 2, e: ry * ry / w });
+  }
+  xs.sort((a, b) => b.r - a.r); ys.sort((a, b) => b.r - a.r);
+  return { xs, ys };
+}
 
 // ---------- Rebuild after any setting change ----------
 function rebuild({ keepTrail = false } = {}) {
-  S.comps = activeComps();
-  S.origin = S.mode === 'trace' ? [S.trace.offset.re, S.trace.offset.im] : [0, 0];
-  S.period = computePeriod(S.comps);
+  S.chains = buildChains();
+  layoutChains();
+  S.period = computePeriod(S.chains.flatMap(c => c.comps));
   computeCache();
   if (!keepTrail) S.trailStart = S.t;
   renderFormula();
@@ -886,16 +1019,9 @@ function rebuild({ keepTrail = false } = {}) {
 }
 
 // ---------- View transform ----------
-function extent() {
-  if (S.mode === 'build') {
-    const sum = S.circles.filter(c => c.on).reduce((a, c) => a + Math.abs(c.r), 0);
-    return Math.max(BUILD_EXTENT, sum * 1.04);
-  }
-  return TRACE_EXTENT;
-}
-function scale() { return Math.max(1e-3, (Math.min(W, H) / 2 - 10) / extent() * S.zoom); }
-function toScreen(x, y, s = scale()) { return [W / 2 + (x - S.vx) * s, H / 2 - (y - S.vy) * s]; }
-function toWorld(px, py, s = scale()) { return [(px - W / 2) / s + S.vx, -(py - H / 2) / s + S.vy]; }
+function scale() { return Math.max(1e-3, (Math.min(W, H) / 2 - 10) / S.layoutExtent * S.zoom); }
+function toScreen(x, y, s = scale()) { return [W / 2 + (x - S.cx - S.vx) * s, H / 2 - (y - S.cy - S.vy) * s]; }
+function toWorld(px, py, s = scale()) { return [(px - W / 2) / s + S.cx + S.vx, -(py - H / 2) / s + S.cy + S.vy]; }
 function resetView() { S.zoom = 1; S.vx = 0; S.vy = 0; updateZoomLabel(); }
 function zoomBy(f, px = W / 2, py = H / 2) {
   const before = toWorld(px, py);
@@ -940,13 +1066,21 @@ function drawGrid(s) {
   ctx.moveTo(0, Math.round(ay) + 0.5); ctx.lineTo(W, Math.round(ay) + 0.5);
   ctx.stroke();
 }
-
+function drawPhoto(s) {
+  const T = S.trace, P = T.photo;
+  if (S.mode !== 'trace' || !P || !S.show.photo) return;
+  const X = T.photoXform;
+  const left = (-P.w / 2 * P.u - X.cx) * X.k, top = (P.h / 2 * P.u - X.cy) * X.k;
+  const [sx, sy] = toScreen(left, top, s);
+  ctx.globalAlpha = T.state === 'draw' ? 0.6 : 0.3;
+  ctx.drawImage(P.img, sx, sy, P.w * P.u * X.k * s, P.h * P.u * X.k * s);
+  ctx.globalAlpha = 1;
+}
 function polyline(pts, s, close) {
   ctx.beginPath();
   pts.forEach((p, i) => { const [x, y] = toScreen(p[0], p[1], s); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
   if (close) ctx.closePath();
 }
-
 function drawClosingGap(pts, s) {
   if (pts.length < 2) return;
   const a = toScreen(pts[pts.length - 1][0], pts[pts.length - 1][1], s);
@@ -963,13 +1097,11 @@ function drawClosingGap(pts, s) {
   ctx.beginPath(); ctx.arc(a[0], a[1], 4, 0, TAU); ctx.fill();
   ctx.restore();
 }
-
 function cachePoint(j) {
   const M = S.cacheCount;
   const k = ((j % M) + M) % M;
   return [S.cache[2 * k], S.cache[2 * k + 1]];
 }
-
 function tracePath(a, b, s) {
   // path of the pen from time a to b (b − a < period)
   ctx.beginPath();
@@ -980,7 +1112,6 @@ function tracePath(a, b, s) {
   }
   p = toScreen(...evalAt(b), s); ctx.lineTo(p[0], p[1]);
 }
-
 function fullCurvePath(s) {
   ctx.beginPath();
   for (let j = 0; j < S.cacheCount; j++) {
@@ -989,20 +1120,56 @@ function fullCurvePath(s) {
   }
   ctx.closePath();
 }
-
+function drawCross(x, y, s) {
+  const o = toScreen(x, y, s);
+  ctx.strokeStyle = 'rgba(227, 232, 242, 0.5)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(o[0] - 5, o[1]); ctx.lineTo(o[0] + 5, o[1]); ctx.moveTo(o[0], o[1] - 5); ctx.lineTo(o[0], o[1] + 5); ctx.stroke();
+}
+// Draws one chain at time t and returns its tip.
+function drawChain(ch, t, s) {
+  let [x, y] = ch.hub;
+  const n = ch.comps.length;
+  const many = S.mode === 'trace';
+  if (many || ch.kind !== 'z') drawCross(x, y, s);
+  for (let i = 0; i < n; i++) {
+    const c = ch.comps[i];
+    const ang = TAU * c.f * t + c.phi;
+    const nx = x + c.r * Math.cos(ang), ny = y + c.r * Math.sin(ang);
+    const p = toScreen(x, y, s), q = toScreen(nx, ny, s);
+    const sr = c.r * s;
+    const fade = many ? Math.max(0.18, 0.6 - 0.42 * i / Math.max(1, n)) : 0.6;
+    if (S.show.circles && sr > 0.7) {
+      ctx.globalAlpha = fade;
+      ctx.strokeStyle = c.color; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(p[0], p[1], sr, 0, TAU); ctx.stroke();
+    }
+    if (S.show.arms && sr > 0.3) {
+      ctx.globalAlpha = many ? Math.max(0.45, fade + 0.3) : 0.95;
+      ctx.strokeStyle = c.color; ctx.lineWidth = many ? 1.3 : 2;
+      ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
+      if (!many) { ctx.fillStyle = c.color; ctx.beginPath(); ctx.arc(p[0], p[1], 2.6, 0, TAU); ctx.fill(); }
+    }
+    ctx.globalAlpha = 1;
+    x = nx; y = ny;
+  }
+  return [x, y];
+}
 function draw() {
   if (!W) return;
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.fillStyle = '#0b0f18';
   ctx.fillRect(0, 0, W, H);
   const s = scale();
+  drawPhoto(s);
   drawGrid(s);
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
 
   const T = S.trace;
   if (S.mode === 'trace' && T.state === 'draw') {
     if (T.raw.length > 1) {
-      ctx.strokeStyle = '#e3e8f2'; ctx.lineWidth = 2.2;
+      ctx.strokeStyle = 'rgba(11, 15, 24, 0.7)'; ctx.lineWidth = 4.5;
+      polyline(T.raw, s, false); ctx.stroke();
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.2;
       polyline(T.raw, s, false); ctx.stroke();
       drawClosingGap(T.raw, s);
     } else if (T.raw.length === 1) {
@@ -1019,63 +1186,55 @@ function draw() {
     if (T.outline.open) drawClosingGap(T.outline.pts, s);
   }
 
-  if (!S.comps.length && S.mode === 'build') {
-    // Nothing enabled: the pen rests at the origin
-    const p = toScreen(0, 0, s);
-    ctx.fillStyle = '#ffd166'; ctx.beginPath(); ctx.arc(p[0], p[1], 4, 0, TAU); ctx.fill();
-    return;
-  }
-
-  // Faint preview of the complete curve
-  if (S.show.preview) {
-    ctx.strokeStyle = 'rgba(255, 209, 102, 0.2)'; ctx.lineWidth = 1.2;
-    fullCurvePath(s); ctx.stroke();
-  }
-
-  // Trail
-  const a = S.trailStart, b = S.t;
-  if (b > a) {
-    if (b - a >= S.period - 1e-9) fullCurvePath(s); else tracePath(a, b, s);
-    ctx.strokeStyle = 'rgba(255, 209, 102, 0.16)'; ctx.lineWidth = 7; ctx.stroke();
-    ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2.2; ctx.stroke();
+  const total = S.chains.reduce((a, c) => a + c.comps.length, 0);
+  if (total) {
+    // Faint preview of the complete curve
+    if (S.show.preview) {
+      ctx.strokeStyle = 'rgba(255, 209, 102, 0.2)'; ctx.lineWidth = 1.2;
+      fullCurvePath(s); ctx.stroke();
+    }
+    // Trail
+    const a = S.trailStart, b = S.t;
+    if (b > a) {
+      if (b - a >= S.period - 1e-9) fullCurvePath(s); else tracePath(a, b, s);
+      ctx.strokeStyle = 'rgba(255, 209, 102, 0.16)'; ctx.lineWidth = 7; ctx.stroke();
+      ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2.2; ctx.stroke();
+    }
   }
 
   // Epicycles
-  let x = S.origin[0], y = S.origin[1];
-  const t = S.t;
-  const n = S.comps.length;
-  if (S.mode === 'trace') {
-    const o = toScreen(x, y, s);
-    ctx.strokeStyle = 'rgba(227, 232, 242, 0.5)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(o[0] - 5, o[1]); ctx.lineTo(o[0] + 5, o[1]); ctx.moveTo(o[0], o[1] - 5); ctx.lineTo(o[0], o[1] + 5); ctx.stroke();
+  const tips = S.chains.map(ch => drawChain(ch, S.t, s));
+  let pen;
+  if (!S.chains.length) pen = S.offset;
+  else if (S.chains[0].kind === 'z') pen = tips[0];
+  else {
+    pen = [tips[0][0], tips[1][1]];
+    // Guides: the X tip sets the pen's x, the Y tip sets its y
+    const pp = toScreen(pen[0], pen[1], s), px = toScreen(...tips[0], s), py = toScreen(...tips[1], s);
+    ctx.save();
+    ctx.setLineDash([4, 5]); ctx.lineWidth = 1.2;
+    ctx.strokeStyle = 'rgba(95, 211, 234, 0.75)';
+    ctx.beginPath(); ctx.moveTo(px[0], px[1]); ctx.lineTo(pp[0], pp[1]); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255, 126, 182, 0.75)';
+    ctx.beginPath(); ctx.moveTo(py[0], py[1]); ctx.lineTo(pp[0], pp[1]); ctx.stroke();
+    ctx.restore();
+    for (const [q, col] of [[px, '#5fd3ea'], [py, '#ff7eb6']]) { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(q[0], q[1], 3.5, 0, TAU); ctx.fill(); }
+    ctx.font = '600 12px "IBM Plex Mono", ui-monospace, monospace';
+    ctx.fillStyle = 'rgba(95, 211, 234, 0.9)';
+    const hx = toScreen(...S.chains[0].hub, s), hy = toScreen(...S.chains[1].hub, s);
+    const rx = sumR(S.chains[0]) * s, ry = sumR(S.chains[1]) * s;
+    ctx.textAlign = 'center';
+    ctx.fillText('x chain', hx[0], hx[1] - rx - 10);
+    ctx.fillStyle = 'rgba(255, 126, 182, 0.9)';
+    ctx.textAlign = 'right';
+    ctx.fillText('y chain', hy[0] - ry - 10, hy[1] + 4);
+    ctx.textAlign = 'left';
   }
-  for (let i = 0; i < n; i++) {
-    const c = S.comps[i];
-    const ang = TAU * c.f * t + c.phi;
-    const nx = x + c.r * Math.cos(ang), ny = y + c.r * Math.sin(ang);
-    const p = toScreen(x, y, s), q = toScreen(nx, ny, s);
-    const sr = c.r * s;
-    const fade = S.mode === 'trace' ? Math.max(0.18, 0.6 - 0.42 * i / Math.max(1, n)) : 0.6;
-    if (S.show.circles && sr > 0.7) {
-      ctx.globalAlpha = fade;
-      ctx.strokeStyle = c.color; ctx.lineWidth = 1.2;
-      ctx.beginPath(); ctx.arc(p[0], p[1], sr, 0, TAU); ctx.stroke();
-    }
-    if (S.show.arms && sr > 0.3) {
-      ctx.globalAlpha = S.mode === 'trace' ? Math.max(0.45, fade + 0.3) : 0.95;
-      ctx.strokeStyle = c.color; ctx.lineWidth = S.mode === 'trace' ? 1.3 : 2;
-      ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
-      if (S.mode === 'build') { ctx.fillStyle = c.color; ctx.beginPath(); ctx.arc(p[0], p[1], 2.6, 0, TAU); ctx.fill(); }
-    }
-    ctx.globalAlpha = 1;
-    x = nx; y = ny;
-  }
-  // Pen
-  const pen = toScreen(x, y, s);
-  ctx.fillStyle = 'rgba(255, 209, 102, 0.25)'; ctx.beginPath(); ctx.arc(pen[0], pen[1], 9, 0, TAU); ctx.fill();
-  ctx.fillStyle = '#ffd166'; ctx.beginPath(); ctx.arc(pen[0], pen[1], 4.5, 0, TAU); ctx.fill();
-  ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(pen[0], pen[1], 1.8, 0, TAU); ctx.fill();
-  S.pen = [x, y];
+  const p = toScreen(pen[0], pen[1], s);
+  ctx.fillStyle = 'rgba(255, 209, 102, 0.25)'; ctx.beginPath(); ctx.arc(p[0], p[1], 9, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#ffd166'; ctx.beginPath(); ctx.arc(p[0], p[1], 4.5, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(p[0], p[1], 1.8, 0, TAU); ctx.fill();
+  S.pen = pen;
 }
 
 // ---------- Animation loop ----------
@@ -1095,7 +1254,6 @@ function frame(now) {
   updateTimeUI();
   requestAnimationFrame(frame);
 }
-
 let lastReadout = '';
 function updateTimeUI() {
   const P = S.period;
@@ -1112,54 +1270,77 @@ function updateTimeUI() {
 }
 
 // ---------- Formula ----------
-function term(r, f, phiDeg, color, first) {
-  const sign = first ? '' : ' + ';
+function argStr(f, phiDeg) {
   const fStr = f < 0 ? `(${fmtTrim(f, 2)})` : fmtTrim(f, 2);
-  const ph = fmtTrim(phiDeg, 0);
-  const phStr = phiDeg < 0 ? ` − ${ph.replace('−', '')}°` : ` + ${ph}°`;
-  return `${sign}<span class="term" style="color:${color}">${fmtTrim(r, 1)}·<i>e</i><sup><i>i</i>(2π·${fStr}<i>t</i>${phStr})</sup></span>`;
+  const ph = fmtTrim(Math.abs(phiDeg), 0);
+  return `2π·${fStr}<i>t</i> ${phiDeg < 0 ? '−' : '+'} ${ph}°`;
+}
+function wrapDeg(rad) { let d = rad * 180 / Math.PI; d = ((d + 180) % 360 + 360) % 360 - 180; return d; }
+function termExp(c, first) {
+  return `${first ? '' : ' + '}<span class="term" style="color:${c.color}">${fmtTrim(c.r, 1)}·<i>e</i><sup><i>i</i>(${argStr(c.f, wrapDeg(c.phi))})</sup></span>`;
+}
+function termTrig(c, fn, first) {
+  return `${first ? '' : ' + '}<span class="term" style="color:${c.color}">${fmtTrim(c.r, 1)}·${fn}(${argStr(c.f, wrapDeg(c.phi))})</span>`;
+}
+function seriesLine(lhs, comps, kind, constant, limit) {
+  const fn = kind === 'x' ? 'cos' : 'sin';
+  const shown = Math.min(limit, comps.length);
+  let html = `${lhs} = `;
+  let first = true;
+  if (constant !== null) { html += `<span class="term">${constant}</span>`; first = false; }
+  if (!comps.length && constant === null) html += '0';
+  for (let i = 0; i < shown; i++) { html += kind === 'z' ? termExp(comps[i], first) : termTrig(comps[i], fn, first); first = false; }
+  if (comps.length > shown) html += ` <span class="more">+ ${comps.length - shown} smaller term${comps.length - shown > 1 ? 's' : ''}</span>`;
+  return `<div class="line">${html}</div>`;
 }
 function renderFormula() {
   const el = $('formula');
-  if (S.mode === 'build') {
-    if (!S.comps.length) { el.innerHTML = '<i>z</i>(<i>t</i>) = 0 <span class="more">(no circles enabled)</span>'; return; }
-    el.innerHTML = '<i>z</i>(<i>t</i>) = ' + S.comps.map((c, i) => term(c.r, c.f, c.p !== undefined ? c.p : c.phi * 180 / Math.PI, c.color, i === 0)).join('');
+  const T = S.trace;
+  if (S.mode === 'trace' && T.state !== 'run') { el.innerHTML = '<span class="more">Convert an outline to see its Fourier series.</span>'; return; }
+  const trace = S.mode === 'trace';
+  const limit = trace ? (S.axes === 'complex' ? 6 : 4) : 99;
+  const o = T.offset;
+  if (S.axes === 'complex') {
+    const c0 = trace ? `(${fmtTrim(o.re, 1)} ${o.im < 0 ? '−' : '+'} ${fmtTrim(Math.abs(o.im), 1)}<i>i</i>)` : null;
+    el.innerHTML = seriesLine('<i>z</i>(<i>t</i>)', S.chains[0].comps, 'z', c0, limit);
     return;
   }
-  const T = S.trace;
-  if (T.state !== 'run') { el.innerHTML = '<span class="more">Convert an outline to see its Fourier series.</span>'; return; }
-  const o = T.offset;
-  const c0 = `<span class="term">(${fmtTrim(o.re, 1)} ${o.im < 0 ? '−' : '+'} ${fmtTrim(Math.abs(o.im), 1)}<i>i</i>)</span>`;
-  const shown = Math.min(6, S.comps.length);
-  let html = '<i>z</i>(<i>t</i>) = ' + c0;
-  for (let i = 0; i < shown; i++) { const c = S.comps[i]; html += term(c.r, c.f, c.phi * 180 / Math.PI, c.color, false); }
-  if (S.comps.length > shown) html += ` <span class="more">+ ${S.comps.length - shown} smaller term${S.comps.length - shown > 1 ? 's' : ''}</span>`;
-  el.innerHTML = html;
+  el.innerHTML = seriesLine('<i>x</i>(<i>t</i>)', S.chains[0].comps, 'x', trace ? fmtTrim(o.re, 1) : null, limit) +
+                 seriesLine('<i>y</i>(<i>t</i>)', S.chains[1].comps, 'y', trace ? fmtTrim(o.im, 1) : null, limit);
 }
 
 // ---------- Build mode UI ----------
-function setCircles(list) {
-  S.circles = list.map(([r, f, p], i) => ({ id: S.nextId++, r, f, p, on: true, color: CIRCLE_COLORS[i % CIRCLE_COLORS.length] }));
+function makeCircles(list, colorOffset = 0) {
+  return list.map(([r, f, p], i) => ({ id: S.nextId++, r, f, p, on: true, color: CIRCLE_COLORS[(i + colorOffset) % CIRCLE_COLORS.length] }));
 }
 function applyPreset(id) {
-  const pr = PRESETS.find(p => p.id === id);
-  setCircles(pr.circles);
-  S.activePreset = id;
-  renderPresets(); renderCircleList();
+  if (S.axes === 'complex') {
+    const pr = PRESETS.find(p => p.id === id);
+    S.circles = makeCircles(pr.circles);
+    S.activePreset = id;
+  } else {
+    const pr = XY_PRESETS.find(p => p.id === id);
+    S.circlesX = makeCircles(pr.x, 0);
+    S.circlesY = makeCircles(pr.y, 1);
+    S.activePresetXY = id;
+  }
+  renderPresets(); renderCircleGroups();
   S.t = 0; resetView();
   rebuild();
 }
 function renderPresets() {
   const box = $('presets');
   box.innerHTML = '';
-  for (const p of PRESETS) {
+  const list = S.axes === 'complex' ? PRESETS : XY_PRESETS;
+  const active = S.axes === 'complex' ? S.activePreset : S.activePresetXY;
+  for (const p of list) {
     const b = document.createElement('button');
     b.className = 'chip'; b.textContent = p.label; b.id = 'preset-' + p.id;
-    b.setAttribute('aria-pressed', String(S.activePreset === p.id));
+    b.setAttribute('aria-pressed', String(active === p.id));
     b.onclick = () => applyPreset(p.id);
     box.appendChild(b);
   }
-  const pr = PRESETS.find(p => p.id === S.activePreset);
+  const pr = list.find(p => p.id === active);
   $('preset-note').textContent = pr ? pr.note : 'Custom figure: you have changed the preset’s circles.';
 }
 function ctlRow(id, label, unit, min, max, step, value) {
@@ -1168,67 +1349,127 @@ function ctlRow(id, label, unit, min, max, step, value) {
     <span class="num-wrap"><input type="number" id="${id}-n" min="${min}" max="${max}" step="${step}" value="${value}" aria-label="${label} value"><span class="unit">${unit}</span></span></div>`;
 }
 function onCircleEdited() {
-  if (S.activePreset) { S.activePreset = null; renderPresets(); }
+  if (S.axes === 'complex' && S.activePreset) { S.activePreset = null; renderPresets(); }
+  if (S.axes === 'xy' && S.activePresetXY) { S.activePresetXY = null; renderPresets(); }
   rebuild();
 }
-function renderCircleList() {
-  const list = $('circle-list');
-  list.innerHTML = '';
-  const fStep = S.fractional ? 0.1 : 1;
-  S.circles.forEach((c, idx) => {
-    const card = document.createElement('div');
-    card.className = 'circle-card' + (c.on ? '' : ' off');
-    card.style.setProperty('--c', c.color);
-    const pid = 'c' + c.id;
-    card.innerHTML = `<div class="cc-head">
-        <span class="cc-name">Circle ${idx + 1}</span>
-        <label class="toggle"><input type="checkbox" id="${pid}-on" ${c.on ? 'checked' : ''}> Enabled</label>
-        <button class="icon-btn" id="${pid}-del" aria-label="Remove circle ${idx + 1}" title="Remove circle" ${S.circles.length <= 1 ? 'disabled' : ''}>
-          <svg viewBox="0 0 16 16" width="13" height="13"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>
-      </div>
-      ${ctlRow(pid + '-r', 'Radius', '', 0, 200, 1, c.r)}
-      ${ctlRow(pid + '-f', 'Frequency', '/cyc', -12, 12, fStep, c.f)}
-      ${ctlRow(pid + '-p', 'Phase', '°', -180, 180, 1, c.p)}`;
-    list.appendChild(card);
-    const bind = (key, min, max) => {
-      const range = card.querySelector('#' + pid + '-' + key);
-      const num = card.querySelector('#' + pid + '-' + key + '-n');
-      range.addEventListener('input', () => { c[key] = Number(range.value); num.value = range.value; onCircleEdited(); });
-      num.addEventListener('input', () => {
-        if (num.value === '' || !isFinite(Number(num.value))) return;
-        let v = Math.min(max, Math.max(min, Number(num.value)));
-        if (key === 'f') v = S.fractional ? Math.round(v * 10) / 10 : Math.round(v);
-        c[key] = v; range.value = String(v); onCircleEdited();
-      });
-      num.addEventListener('change', () => { num.value = String(c[key]); });
-    };
-    bind('r', 0, 200); bind('f', -12, 12); bind('p', -180, 180);
-    card.querySelector('#' + pid + '-on').addEventListener('change', (e) => {
-      c.on = e.target.checked; card.classList.toggle('off', !c.on); onCircleEdited();
-    });
-    card.querySelector('#' + pid + '-del').addEventListener('click', () => {
-      S.circles = S.circles.filter(x => x !== c);
-      renderCircleList(); onCircleEdited();
-    });
-  });
-  $('circle-count').textContent = `${S.circles.length} of ${MAX_CIRCLES}`;
-  $('add-circle').disabled = S.circles.length >= MAX_CIRCLES;
+function circleGroups() {
+  if (S.axes === 'complex') return [{ key: 'circles', prefix: 'Circle ', max: MAX_CIRCLES }];
+  return [
+    { key: 'circlesX', prefix: 'X', max: MAX_AXIS_CIRCLES, title: 'X axis · top chain', sub: 'x(t) = Σ r·cos(2πft + φ)', colorOffset: 0 },
+    { key: 'circlesY', prefix: 'Y', max: MAX_AXIS_CIRCLES, title: 'Y axis · left chain', sub: 'y(t) = Σ r·sin(2πft + φ)', colorOffset: 1 },
+  ];
 }
-$('add-circle').addEventListener('click', () => {
-  if (S.circles.length >= MAX_CIRCLES) return;
-  const used = new Set(S.circles.map(c => c.color));
-  const color = CIRCLE_COLORS.find(c => !used.has(c)) || CIRCLE_COLORS[S.circles.length % CIRCLE_COLORS.length];
-  const lastF = S.circles.length ? S.circles[S.circles.length - 1].f : 0;
-  const f = Math.max(-12, Math.min(12, lastF >= 0 ? -(Math.round(Math.abs(lastF)) + 1) : Math.round(Math.abs(lastF)) + 1));
-  S.circles.push({ id: S.nextId++, r: 30, f, p: 0, on: true, color });
-  renderCircleList(); onCircleEdited();
-  const list = $('circle-list'); list.lastElementChild?.scrollIntoView({ block: 'nearest' });
-});
+function renderCircleGroups() {
+  const host = $('circle-groups');
+  host.innerHTML = '';
+  const fStep = S.fractional ? 0.1 : 1;
+  const counts = [];
+  for (const g of circleGroups()) {
+    const arr = S[g.key];
+    counts.push(`${arr.length} of ${g.max}`);
+    const wrap = document.createElement('div');
+    wrap.className = 'section';
+    wrap.style.gap = '8px';
+    if (g.title) wrap.innerHTML = `<div class="group-head"><h3>${g.title}</h3><span>${g.sub}</span></div>`;
+    const list = document.createElement('div');
+    list.className = 'circle-list';
+    wrap.appendChild(list);
+    arr.forEach((c, idx) => {
+      const card = document.createElement('div');
+      card.className = 'circle-card' + (c.on ? '' : ' off');
+      card.style.setProperty('--c', c.color);
+      const pid = 'c' + c.id;
+      const name = g.prefix + (idx + 1);
+      card.innerHTML = `<div class="cc-head">
+          <span class="cc-name">${name}</span>
+          <label class="toggle"><input type="checkbox" id="${pid}-on" ${c.on ? 'checked' : ''}> Enabled</label>
+          <button class="icon-btn" id="${pid}-del" aria-label="Remove ${name}" title="Remove circle" ${arr.length <= 1 ? 'disabled' : ''}>
+            <svg viewBox="0 0 16 16" width="13" height="13"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>
+        </div>
+        ${ctlRow(pid + '-r', 'Radius', '', 0, 200, 1, c.r)}
+        ${ctlRow(pid + '-f', 'Frequency', '/cyc', -12, 12, fStep, c.f)}
+        ${ctlRow(pid + '-p', 'Phase', '°', -180, 180, 1, c.p)}`;
+      list.appendChild(card);
+      const bind = (key, min, max) => {
+        const range = card.querySelector('#' + pid + '-' + key);
+        const num = card.querySelector('#' + pid + '-' + key + '-n');
+        range.addEventListener('input', () => { c[key] = Number(range.value); num.value = range.value; onCircleEdited(); });
+        num.addEventListener('input', () => {
+          if (num.value === '' || !isFinite(Number(num.value))) return;
+          let v = Math.min(max, Math.max(min, Number(num.value)));
+          if (key === 'f') v = S.fractional ? Math.round(v * 10) / 10 : Math.round(v);
+          c[key] = v; range.value = String(v); onCircleEdited();
+        });
+        num.addEventListener('change', () => { num.value = String(c[key]); });
+      };
+      bind('r', 0, 200); bind('f', -12, 12); bind('p', -180, 180);
+      card.querySelector('#' + pid + '-on').addEventListener('change', (e) => {
+        c.on = e.target.checked; card.classList.toggle('off', !c.on); onCircleEdited();
+      });
+      card.querySelector('#' + pid + '-del').addEventListener('click', () => {
+        S[g.key] = S[g.key].filter(x => x !== c);
+        renderCircleGroups(); onCircleEdited();
+      });
+    });
+    const add = document.createElement('button');
+    add.className = 'btn';
+    add.id = 'add-' + g.key;
+    add.textContent = g.title ? `+ Add ${g.prefix} circle` : '+ Add circle';
+    add.disabled = arr.length >= g.max;
+    add.style.alignSelf = 'flex-start';
+    add.addEventListener('click', () => addCircle(g));
+    wrap.appendChild(add);
+    host.appendChild(wrap);
+  }
+  $('circle-count').textContent = counts.join(' · ');
+}
+function addCircle(g) {
+  const arr = S[g.key];
+  if (arr.length >= g.max) return;
+  const used = new Set(arr.map(c => c.color));
+  const color = CIRCLE_COLORS.find(c => !used.has(c)) || CIRCLE_COLORS[arr.length % CIRCLE_COLORS.length];
+  const lastF = arr.length ? arr[arr.length - 1].f : 0;
+  let f;
+  if (S.axes === 'complex') f = lastF >= 0 ? -(Math.round(Math.abs(lastF)) + 1) : Math.round(Math.abs(lastF)) + 1;
+  else f = Math.round(Math.abs(lastF)) + 2;
+  f = Math.max(-12, Math.min(12, f));
+  arr.push({ id: S.nextId++, r: 30, f, p: 0, on: true, color });
+  renderCircleGroups(); onCircleEdited();
+  $('add-' + g.key)?.scrollIntoView({ block: 'nearest' });
+}
 $('fractional').addEventListener('change', (e) => {
   S.fractional = e.target.checked;
-  if (!S.fractional) S.circles.forEach(c => { c.f = Math.round(c.f); });
-  renderCircleList(); rebuild();
+  if (!S.fractional) [...S.circles, ...S.circlesX, ...S.circlesY].forEach(c => { c.f = Math.round(c.f); });
+  renderCircleGroups(); rebuild();
 });
+
+// ---------- Circle layout (one chain vs X and Y) ----------
+function renderAxesUI() {
+  $('axes-complex').setAttribute('aria-checked', String(S.axes === 'complex'));
+  $('axes-xy').setAttribute('aria-checked', String(S.axes === 'xy'));
+  $('axes-note').innerHTML = S.axes === 'complex'
+    ? 'One chain of rotating arrows in the complex plane. The pen is the tip of the chain.'
+    : 'Two independent chains. The top chain sets the pen’s <b>x</b>, the left chain sets its <b>y</b>; the dashed guides carry each tip to the pen. Unequal frequencies on the two axes make Lissajous figures.';
+}
+function setAxes(a) {
+  if (S.axes === a) return;
+  S.axes = a;
+  if (a === 'xy' && !S.circlesX.length && !S.circlesY.length) {
+    const pr = XY_PRESETS.find(p => p.id === 'xy-32');
+    S.circlesX = makeCircles(pr.x, 0); S.circlesY = makeCircles(pr.y, 1); S.activePresetXY = pr.id;
+  }
+  renderAxesUI(); renderPresets(); renderCircleGroups();
+  S.trace.K = Math.min(S.trace.K, kMax());
+  resetView();
+  S.t = 0;
+  rebuild();
+  S.trailStart = 0;
+  syncKControls();
+  if (S.mode === 'trace') renderTraceUI();
+}
+$('axes-complex').addEventListener('click', () => setAxes('complex'));
+$('axes-xy').addEventListener('click', () => setAxes('xy'));
 
 // ---------- Trace mode UI ----------
 function renderOutlines() {
@@ -1245,14 +1486,14 @@ function renderOutlines() {
 function loadOutline(id) {
   const o = OUTLINES.find(x => x.id === id);
   S.trace.activeOutline = id;
+  clearPhoto();
   convert({ name: o.label, pts: o.make(), open: !o.closed });
 }
 function strokeIsOpen(pts) {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const [x, y] of pts) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
-  const diag = Math.hypot(maxX - minX, maxY - minY) || 1;
-  const a = pts[0], b = pts[pts.length - 1];
-  return Math.hypot(a[0] - b[0], a[1] - b[1]) > 0.04 * diag;
+  const b = bbox(pts);
+  const diag = Math.hypot(b.maxX - b.minX, b.maxY - b.minY) || 1;
+  const a = pts[0], z = pts[pts.length - 1];
+  return Math.hypot(a[0] - z[0], a[1] - z[1]) > 0.04 * diag;
 }
 function strokeLength(pts) {
   let L = 0;
@@ -1265,19 +1506,24 @@ function convert(outline) {
   const T = S.trace;
   const pts = dedupe(outline.pts);
   if (pts.length < 3) return;
-  const norm = normalize(pts);
-  const samples = resample(norm, N_SAMPLES);
+  const nz = normalize(pts);
+  const samples = resample(nz.pts, N_SAMPLES);
   const coeffs = dft(samples);
   const c0 = coeffs.find(c => c.f === 0);
   T.coeffs = coeffs.filter(c => c.f !== 0).sort((a, b) => b.r - a.r);
+  const { xs, ys } = splitXY(coeffs, N_SAMPLES);
+  T.xComps = xs; T.yComps = ys;
   T.offset = { re: c0.re, im: c0.im };
   T.energy = T.coeffs.reduce((a, c) => a + c.r * c.r, 0);
   T.size = 2 * TRACE_HALF_SIZE;
-  T.outline = { name: outline.name, pts: norm, open: outline.open };
+  T.outline = { name: outline.name, pts: nz.pts, open: outline.open };
+  // A photo stays aligned with the outline traced from it
+  T.photoXform = T.photo ? { cx: nz.cx, cy: nz.cy, k: nz.k } : { cx: 0, cy: 0, k: 1 };
   T.state = 'run';
   T.raw = [];
-  T.K = Math.min(T.K, T.coeffs.length);
+  T.K = Math.min(T.K, kMax());
   S.t = 0; S.trailStart = 0; S.playing = true;
+  renderPlay();
   resetView();
   rebuild();
   S.trailStart = 0;
@@ -1285,14 +1531,21 @@ function convert(outline) {
   renderTraceUI();
 }
 
+function kMax() {
+  const T = S.trace;
+  if (S.axes === 'xy') return Math.max(1, T.xComps.length || N_SAMPLES / 2);
+  return Math.max(1, T.coeffs.length || N_SAMPLES - 1);
+}
+function kLabel(k) { return `${k} circle${k > 1 ? 's' : ''}${S.axes === 'xy' ? ' per axis' : ''}`; }
 function syncKControls() {
   const T = S.trace;
-  const max = Math.max(1, T.coeffs.length || N_SAMPLES - 1);
+  const max = kMax();
+  T.K = Math.max(1, Math.min(max, T.K));
   $('k-max').textContent = String(max);
   $('k-num').max = String(max);
   $('k-num').value = String(T.K);
-  $('k-range').value = String(Math.round(Math.log(T.K) / Math.log(max) * 1000));
-  $('k-label').textContent = `${T.K} circle${T.K > 1 ? 's' : ''}`;
+  $('k-range').value = String(max > 1 ? Math.round(Math.log(T.K) / Math.log(max) * 1000) : 1000);
+  $('k-label').textContent = kLabel(T.K);
   const quick = $('k-quick');
   quick.innerHTML = '';
   const opts = [[3, 'Simple · 3'], [10, '10'], [30, '30'], [100, '100'], [max, `All · ${max}`]];
@@ -1305,19 +1558,16 @@ function syncKControls() {
   }
 }
 function setK(k) {
-  const T = S.trace;
-  const max = Math.max(1, T.coeffs.length);
-  T.K = Math.max(1, Math.min(max, Math.round(k)));
+  S.trace.K = Math.max(1, Math.min(kMax(), Math.round(k)));
   rebuild();
   syncKControls();
 }
 $('k-range').addEventListener('input', (e) => {
-  const max = Math.max(1, S.trace.coeffs.length);
-  const k = Math.round(Math.exp(Number(e.target.value) / 1000 * Math.log(max)));
-  if (k !== S.trace.K) { S.trace.K = Math.max(1, Math.min(max, k)); rebuild(); }
-  const T = S.trace;
-  $('k-num').value = String(T.K);
-  $('k-label').textContent = `${T.K} circle${T.K > 1 ? 's' : ''}`;
+  const max = kMax();
+  const k = Math.max(1, Math.min(max, Math.round(Math.exp(Number(e.target.value) / 1000 * Math.log(max)))));
+  if (k !== S.trace.K) { S.trace.K = k; rebuild(); }
+  $('k-num').value = String(S.trace.K);
+  $('k-label').textContent = kLabel(S.trace.K);
   $('k-quick').querySelectorAll('.chip').forEach(b => b.setAttribute('aria-pressed', 'false'));
 });
 $('k-range').addEventListener('change', syncKControls);
@@ -1331,7 +1581,8 @@ function renderTraceStats() {
     return;
   }
   let kept = 0;
-  for (let i = 0; i < T.K; i++) kept += T.coeffs[i].r ** 2;
+  if (S.axes === 'complex') for (let i = 0; i < T.K; i++) kept += T.coeffs[i].r ** 2;
+  else for (let i = 0; i < T.K; i++) kept += T.xComps[i].e + T.yComps[i].e;
   const frac = Math.min(1, kept / T.energy);
   // Parseval: the mean squared distance between the outline samples and the
   // reconstruction equals the energy of the dropped components.
@@ -1348,7 +1599,7 @@ function renderTraceUI() {
   const drawing = T.state === 'draw';
   $('convert').disabled = !(drawing && strokeValid(T.raw));
   $('convert').hidden = !drawing;
-  $('draw-own').textContent = drawing ? 'Clear drawing' : 'Draw your own';
+  $('draw-own').textContent = drawing ? (T.photo ? 'Clear outline' : 'Clear drawing') : 'Draw your own';
   $('components-section').style.opacity = drawing ? '0.45' : '';
   $('transport').classList.toggle('dim', drawing);
   canvas.classList.toggle('drawing', drawing);
@@ -1356,8 +1607,10 @@ function renderTraceUI() {
   const hint = $('hint');
   if (drawing) {
     if (!T.raw.length) {
-      st.textContent = 'Drag on the canvas to draw one continuous outline with your mouse, pen or finger. Lifting ends the stroke; drawing again replaces it.';
-      hint.textContent = 'Draw one continuous outline here';
+      st.textContent = T.photo
+        ? 'Trace around the object in the photo with one continuous stroke, or press “Use detected outline”.'
+        : 'Drag on the canvas to draw one continuous outline with your mouse, pen or finger. Lifting ends the stroke; drawing again replaces it.';
+      hint.textContent = T.photo ? 'Trace around the object' : 'Draw one continuous outline here';
     } else if (T.stroking) {
       st.textContent = 'Drawing… lift to finish the stroke.';
       hint.textContent = 'Lift to finish';
@@ -1370,7 +1623,7 @@ function renderTraceUI() {
       st.className = 'note warn';
       hint.textContent = 'Ready: press Convert to Circles';
     } else {
-      st.textContent = 'Your outline is closed. Ready to convert.';
+      st.textContent = 'The outline is closed. Ready to convert.';
       st.className = 'note okay';
       hint.textContent = 'Ready: press Convert to Circles';
     }
@@ -1382,12 +1635,21 @@ function renderTraceUI() {
         (T.outline.open ? ' This outline is open, so the dashed segment is part of the loop the circles trace.' : '');
     }
   }
+  const hasPhoto = !!T.photo;
+  $('photo-controls').hidden = !hasPhoto || !drawing;
+  $('photo-redetect').hidden = !hasPhoto || !drawing;
+  $('photo-remove').hidden = !hasPhoto;
+  $('photo-pick').textContent = hasPhoto ? 'Choose another photo…' : 'Choose photo…';
+  $('show-photo').disabled = !hasPhoto;
+  $('show-photo-label').classList.toggle('disabled', !hasPhoto);
   renderOutlines();
 }
 
 $('draw-own').addEventListener('click', () => {
   const T = S.trace;
   T.state = 'draw'; T.raw = []; T.stroking = false;
+  T.photoXform = { cx: 0, cy: 0, k: 1 };
+  if (T.photo) $('photo-status').textContent = 'Outline cleared. Trace by hand, or press “Use detected outline”.';
   resetView();
   rebuild();
   renderTraceUI();
@@ -1396,7 +1658,233 @@ $('convert').addEventListener('click', () => {
   const T = S.trace;
   if (!strokeValid(T.raw)) return;
   T.activeOutline = null;
-  convert({ name: 'your drawing', pts: T.raw.slice(), open: strokeIsOpen(T.raw) });
+  const name = T.photo ? (T.rawFromPhoto ? 'outline detected in your photo' : 'your tracing of the photo') : 'your drawing';
+  convert({ name, pts: T.raw.slice(), open: strokeIsOpen(T.raw) });
+});
+
+// ---------- Photo tracing ----------
+// Pipeline: downscale → grayscale → light blur → Otsu threshold → largest connected
+// object → Moore-neighbour trace of its outer boundary → smoothing.
+function otsu(gray) {
+  const hist = new Float64Array(256);
+  for (let i = 0; i < gray.length; i++) hist[Math.max(0, Math.min(255, Math.round(gray[i])))]++;
+  const total = gray.length;
+  let sumAll = 0; for (let i = 0; i < 256; i++) sumAll += i * hist[i];
+  let wB = 0, sumB = 0, best = 0, thr = 128;
+  for (let t = 0; t < 256; t++) {
+    wB += hist[t]; if (!wB) continue;
+    const wF = total - wB; if (!wF) break;
+    sumB += t * hist[t];
+    const mB = sumB / wB, mF = (sumAll - sumB) / wF;
+    const v = wB * wF * (mB - mF) ** 2;
+    if (v > best) { best = v; thr = t; }
+  }
+  return thr;
+}
+function boxBlur(src, w, h) {
+  const out = new Float32Array(src.length);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let s = 0, n = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const xx = x + dx, yy = y + dy;
+      if (xx >= 0 && yy >= 0 && xx < w && yy < h) { s += src[yy * w + xx]; n++; }
+    }
+    out[y * w + x] = s / n;
+  }
+  return out;
+}
+function borderMean(gray, w, h) {
+  let s = 0, n = 0;
+  for (let x = 0; x < w; x++) { s += gray[x] + gray[(h - 1) * w + x]; n += 2; }
+  for (let y = 0; y < h; y++) { s += gray[y * w] + gray[y * w + w - 1]; n += 2; }
+  return s / n;
+}
+// Square dilation (separable); pixels outside the image count as `edge`.
+function dilate(mask, w, h, r, edge = 0) {
+  const tmp = new Uint8Array(w * h), out = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let v = 0;
+    for (let d = -r; d <= r && !v; d++) { const xx = x + d; v = (xx < 0 || xx >= w) ? edge : mask[y * w + xx]; }
+    tmp[y * w + x] = v;
+  }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let v = 0;
+    for (let d = -r; d <= r && !v; d++) { const yy = y + d; v = (yy < 0 || yy >= h) ? edge : tmp[yy * w + x]; }
+    out[y * w + x] = v;
+  }
+  return out;
+}
+// Morphological closing joins parts separated by hairline gaps (a mug and its handle).
+function closeMask(mask, w, h, r) {
+  const d = dilate(mask, w, h, r, 0);
+  for (let i = 0; i < d.length; i++) d[i] ^= 1;
+  const e = dilate(d, w, h, r, 0);
+  for (let i = 0; i < e.length; i++) e[i] ^= 1;
+  return e;
+}
+function largestComponent(mask, w, h) {
+  const label = new Int32Array(w * h);
+  let best = 0, bestLabel = 0, cur = 0;
+  const stack = new Int32Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    if (!mask[i] || label[i]) continue;
+    cur++;
+    let sp = 0, size = 0;
+    stack[sp++] = i; label[i] = cur;
+    while (sp) {
+      const p = stack[--sp]; size++;
+      const x = p % w, y = (p / w) | 0;
+      if (x > 0 && mask[p - 1] && !label[p - 1]) { label[p - 1] = cur; stack[sp++] = p - 1; }
+      if (x < w - 1 && mask[p + 1] && !label[p + 1]) { label[p + 1] = cur; stack[sp++] = p + 1; }
+      if (y > 0 && mask[p - w] && !label[p - w]) { label[p - w] = cur; stack[sp++] = p - w; }
+      if (y < h - 1 && mask[p + w] && !label[p + w]) { label[p + w] = cur; stack[sp++] = p + w; }
+    }
+    if (size > best) { best = size; bestLabel = cur; }
+  }
+  return { label, id: bestLabel, size: best };
+}
+const MOORE = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]]; // clockwise on screen
+function traceBoundary(inside, w, h, start) {
+  const sx = start % w, sy = (start / w) | 0;
+  const isIn = (x, y) => x >= 0 && y >= 0 && x < w && y < h && inside(y * w + x);
+  const pts = [[sx, sy]];
+  let cx = sx, cy = sy, back = 4; // raster start: the west neighbour is outside
+  let firstMove = null;
+  const cap = 4 * w * h;
+  for (let step = 0; step < cap; step++) {
+    let found = -1;
+    for (let i = 1; i <= 8; i++) {
+      const d = (back + i) % 8;
+      if (isIn(cx + MOORE[d][0], cy + MOORE[d][1])) { found = d; break; }
+    }
+    if (found < 0) break; // single isolated pixel
+    const nx = cx + MOORE[found][0], ny = cy + MOORE[found][1];
+    // backtrack = the last outside pixel checked, seen from the new pixel
+    const pd = (found + 7) % 8;
+    const bx = cx + MOORE[pd][0] - nx, by = cy + MOORE[pd][1] - ny;
+    back = MOORE.findIndex(([dx, dy]) => dx === bx && dy === by);
+    if (cx === sx && cy === sy && firstMove !== null && found === firstMove) break;
+    if (firstMove === null) firstMove = found;
+    cx = nx; cy = ny;
+    if (cx === sx && cy === sy) continue;
+    pts.push([cx, cy]);
+  }
+  return pts;
+}
+function smoothClosed(pts, r) {
+  const n = pts.length, out = [];
+  for (let i = 0; i < n; i++) {
+    let x = 0, y = 0;
+    for (let k = -r; k <= r; k++) { const p = pts[(i + k + n) % n]; x += p[0]; y += p[1]; }
+    out.push([x / (2 * r + 1), y / (2 * r + 1)]);
+  }
+  return out;
+}
+function detectFromPhoto() {
+  const T = S.trace, P = T.photo;
+  if (!P) return;
+  const { w, h, gray } = P;
+  let pol = P.polarity;
+  if (pol === 'auto') pol = borderMean(gray, w, h) >= P.threshold ? 'dark' : 'light';
+  const mask = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) mask[i] = pol === 'dark' ? (gray[i] < P.threshold) : (gray[i] > P.threshold);
+  const comp = largestComponent(closeMask(mask, w, h, 3), w, h);
+  const status = $('photo-status');
+  const frac = comp.size / (w * h);
+  if (comp.size < 40 || frac > 0.95) {
+    T.raw = []; T.rawFromPhoto = false;
+    status.className = 'note warn';
+    status.textContent = comp.size < 40
+      ? 'No object found at this threshold. Move the threshold slider or switch “Object is”.'
+      : 'The detected region fills almost the whole photo, so it is probably the background. Switch “Object is” or move the threshold.';
+    renderTraceUI();
+    return;
+  }
+  let start = -1;
+  for (let i = 0; i < w * h; i++) if (comp.label[i] === comp.id) { start = i; break; }
+  let px = traceBoundary(i => comp.label[i] === comp.id, w, h, start);
+  if (px.length > 4000) { const k = Math.ceil(px.length / 4000); px = px.filter((_, i) => i % k === 0); }
+  if (px.length > 12) px = smoothClosed(px, 2);
+  T.raw = px.map(([x, y]) => [(x + 0.5 - w / 2) * P.u, (h / 2 - y - 0.5) * P.u]);
+  T.rawFromPhoto = true;
+  status.className = 'note okay';
+  status.textContent = `Found an object covering ${(frac * 100).toFixed(0)}% of the photo (${pol === 'dark' ? 'darker' : 'lighter'} than its surroundings). Its outer edge is the white outline.`;
+  renderTraceUI();
+}
+function clearPhoto() {
+  const T = S.trace;
+  if (T.photo) URL.revokeObjectURL(T.photo.url);
+  T.photo = null;
+  T.photoXform = { cx: 0, cy: 0, k: 1 };
+  T.rawFromPhoto = false;
+  $('photo-status').className = 'note';
+  $('photo-status').textContent = 'You can also drop or paste an image onto the canvas.';
+}
+function loadPhoto(file) {
+  if (!file || !/^image\//.test(file.type)) { toast('That file is not an image'); return; }
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    const k = Math.min(1, PHOTO_MAX_PX / Math.max(img.naturalWidth, img.naturalHeight));
+    const w = Math.max(8, Math.round(img.naturalWidth * k)), h = Math.max(8, Math.round(img.naturalHeight * k));
+    const off = document.createElement('canvas');
+    off.width = w; off.height = h;
+    const octx = off.getContext('2d', { willReadFrequently: true });
+    octx.drawImage(img, 0, 0, w, h);
+    const data = octx.getImageData(0, 0, w, h).data;
+    let gray = new Float32Array(w * h);
+    for (let i = 0; i < w * h; i++) {
+      const a = data[4 * i + 3] / 255; // transparent pixels count as white background
+      gray[i] = (0.2126 * data[4 * i] + 0.7152 * data[4 * i + 1] + 0.0722 * data[4 * i + 2]) * a + 255 * (1 - a);
+    }
+    gray = boxBlur(boxBlur(gray, w, h), w, h);
+    if (S.trace.photo) URL.revokeObjectURL(S.trace.photo.url);
+    const thr = otsu(gray);
+    S.trace.photo = { img, url, w, h, u: 2 * PHOTO_HALF_SIZE / Math.max(w, h), gray, otsu: thr, threshold: thr, polarity: 'auto' };
+    S.trace.photoXform = { cx: 0, cy: 0, k: 1 };
+    S.trace.activeOutline = null;
+    $('photo-thr').value = String(thr); $('photo-thr-n').value = String(thr);
+    $('photo-polarity').querySelectorAll('.chip').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.pol === 'auto')));
+    if (S.mode !== 'trace') setMode('trace');
+    S.trace.state = 'draw'; S.trace.stroking = false;
+    resetView();
+    rebuild();
+    detectFromPhoto();
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); toast('Could not read that image'); };
+  img.src = url;
+}
+$('photo-input').addEventListener('change', (e) => { const f = e.target.files && e.target.files[0]; if (f) loadPhoto(f); e.target.value = ''; });
+$('photo-remove').addEventListener('click', () => {
+  const wasPhotoOutline = S.trace.state === 'draw';
+  clearPhoto();
+  if (wasPhotoOutline) { S.trace.raw = []; }
+  renderTraceUI();
+});
+$('photo-redetect').addEventListener('click', detectFromPhoto);
+function setThreshold(v) {
+  const P = S.trace.photo; if (!P) return;
+  P.threshold = Math.max(1, Math.min(254, Math.round(v)));
+  $('photo-thr').value = String(P.threshold); $('photo-thr-n').value = String(P.threshold);
+  detectFromPhoto();
+}
+$('photo-thr').addEventListener('input', (e) => setThreshold(Number(e.target.value)));
+$('photo-thr-n').addEventListener('change', (e) => { const v = Number(e.target.value); if (isFinite(v)) setThreshold(v); });
+$('photo-polarity').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-pol]'); if (!b || !S.trace.photo) return;
+  S.trace.photo.polarity = b.dataset.pol;
+  $('photo-polarity').querySelectorAll('.chip').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  detectFromPhoto();
+});
+stage.addEventListener('dragover', (e) => { e.preventDefault(); });
+stage.addEventListener('drop', (e) => {
+  e.preventDefault();
+  const f = [...(e.dataTransfer?.files || [])].find(x => /^image\//.test(x.type));
+  if (f) loadPhoto(f);
+});
+window.addEventListener('paste', (e) => {
+  const item = [...(e.clipboardData?.items || [])].find(x => /^image\//.test(x.type));
+  if (item) { e.preventDefault(); loadPhoto(item.getAsFile()); }
 });
 
 // ---------- Mode switch ----------
@@ -1427,13 +1915,14 @@ $('tab-trace').addEventListener('click', () => setMode('trace'));
 let pan = null;
 function localPoint(e) { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
 canvas.addEventListener('pointerdown', (e) => {
-  if (e.button !== undefined && e.button > 0 && e.pointerType === 'mouse' && e.button !== 1) return;
+  if (e.pointerType === 'mouse' && e.button > 1) return;
   const [px, py] = localPoint(e);
   canvas.setPointerCapture(e.pointerId);
   e.preventDefault();
   const T = S.trace;
   if (S.mode === 'trace' && T.state === 'draw' && e.button !== 1) {
     T.stroking = true;
+    T.rawFromPhoto = false;
     T.raw = [toWorld(px, py)];
     T.lastPx = [px, py];
     renderTraceUI();
@@ -1513,7 +2002,7 @@ $('speed').addEventListener('input', (e) => {
 });
 
 // ---------- Display toggles ----------
-for (const key of ['circles', 'arms', 'outline', 'preview']) {
+for (const key of ['circles', 'arms', 'outline', 'preview', 'photo']) {
   $('show-' + key).addEventListener('change', (e) => { S.show[key] = e.target.checked; });
 }
 
@@ -1521,7 +2010,7 @@ for (const key of ['circles', 'arms', 'outline', 'preview']) {
 window.addEventListener('keydown', (e) => {
   if (e.code !== 'Space') return;
   const tag = (e.target.tagName || '').toLowerCase();
-  if (tag === 'input' || tag === 'button' || tag === 'textarea' || tag === 'summary') return;
+  if (tag === 'input' || tag === 'button' || tag === 'textarea' || tag === 'summary' || tag === 'label') return;
   e.preventDefault(); togglePlay();
 });
 
@@ -1565,6 +2054,7 @@ S.speed = 1;
 $('speed').value = String(sliderFromSpeed(1));
 renderSpeed();
 renderPlay();
+renderAxesUI();
 $('show-outline').disabled = true;
 $('show-outline-label').classList.add('disabled');
 syncKControls();
@@ -1573,7 +2063,7 @@ resize();
 requestAnimationFrame((t) => { last = t; frame(t); });
 
 // Test hook (harmless in production): exposes state for automated checks.
-window.__studio = { S, evalAt, dft, resample, setMode, applyPreset, setK, loadOutline };
+window.__studio = { S, evalAt, dft, resample, splitXY, setMode, setAxes, applyPreset, setK, loadOutline, loadPhoto };
 })();
 </script>
 
