@@ -1,0 +1,1581 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>Fourier Circle Studio</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Explore how rotating circles (epicycles) add up to trace figures, and turn your own drawings into circles with the Discrete Fourier Transform.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=STIX+Two+Text:ital,wght@0,500;0,600;1,400;1,500&display=swap">
+<style>
+/* Layout: a full-height studio. Large canvas stage on the left with a transport bar beneath it,
+   an instrument panel on the right. Below 900px the panel stacks under the stage.
+   Deliberately single-theme (dark): the canvas is a night-sky plotting surface. */
+:root {
+  color-scheme: dark;
+  --ink: #080b12;
+  --stage: #0b0f18;
+  --panel: #0f141e;
+  --raise: #151c29;
+  --raise-2: #1b2433;
+  --line: #243045;
+  --line-soft: #1a2232;
+  --text: #e3e8f2;
+  --muted: #8f99ae;
+  --faint: #5f697e;
+  --accent: #8ab8ff;
+  --accent-ink: #0a1426;
+  --trace: #ffd166;
+  --warn: #ff9a6b;
+  --ok: #7ee08f;
+  --f-display: "STIX Two Text", "Cambria Math", Cambria, "Times New Roman", serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --r-sm: 6px;
+  --r-md: 10px;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  background: var(--ink);
+  color: var(--text);
+  font-family: var(--f-body);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.app {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.topbar {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding-block: 12px 10px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  border-bottom: 1px solid var(--line-soft);
+}
+.brand {
+  font-family: var(--f-display);
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  margin: 0;
+}
+.brand i { color: var(--trace); font-weight: 500; }
+.tagline { color: var(--muted); font-size: 13px; margin: 0; }
+
+.main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 384px;
+  min-height: 0;
+}
+
+/* ---------- Stage ---------- */
+.stage-col {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+  padding-block: 12px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: 12px;
+  gap: 10px;
+}
+.stage {
+  position: relative;
+  min-height: 0;
+  border-radius: var(--r-md);
+  background: var(--stage);
+  border: 1px solid var(--line-soft);
+  overflow: hidden;
+}
+#canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: grab;
+}
+#canvas.panning { cursor: grabbing; }
+#canvas.drawing { cursor: crosshair; }
+.zoom {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.zoom button {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-sm);
+  background: rgba(21, 28, 41, 0.86);
+  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.zoom button:hover { border-color: var(--accent); }
+.zoom .zlabel {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+}
+.readout {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  font-family: var(--f-mono);
+  font-size: 12px;
+  color: var(--muted);
+  background: rgba(11, 15, 24, 0.78);
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.readout b { color: var(--text); font-weight: 500; }
+.hint {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(90%, 440px);
+  text-align: center;
+  font-size: 13px;
+  color: var(--text);
+  background: rgba(21, 28, 41, 0.9);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 14px;
+  pointer-events: none;
+}
+
+/* ---------- Transport ---------- */
+.transport {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+}
+.transport.dim { opacity: 0.5; }
+.tgroup { display: flex; gap: 6px; align-items: center; }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--raise);
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) { border-color: var(--accent); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn.primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.btn.primary:hover:not(:disabled) { background: #a3c7ff; }
+.btn svg { width: 14px; height: 14px; flex: none; }
+.slider-field {
+  display: grid;
+  grid-template-columns: auto minmax(90px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.slider-field label { font-size: 12px; color: var(--muted); }
+.slider-field output {
+  font-family: var(--f-mono);
+  font-size: 12px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  min-width: 9ch;
+  white-space: nowrap;
+  text-align: right;
+}
+#scrub-field { flex-basis: 300px; }
+
+/* ---------- Range inputs ---------- */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 22px;
+  background: transparent;
+  cursor: pointer;
+  margin: 0;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px; border-radius: 2px; background: var(--line);
+}
+input[type="range"]::-moz-range-track { height: 4px; border-radius: 2px; background: var(--line); }
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 16px; height: 16px; margin-top: -6px; border-radius: 50%;
+  background: var(--thumb, var(--accent)); border: 2px solid var(--ink);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--thumb, var(--accent)); border: 2px solid var(--ink);
+}
+
+/* ---------- Panel ---------- */
+.panel {
+  min-height: 0;
+  overflow-y: auto;
+  border-left: 1px solid var(--line-soft);
+  background: var(--panel);
+  padding-block: 14px 28px;
+  padding-left: 16px;
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 3px;
+  gap: 3px;
+  background: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.seg button {
+  border: 0;
+  background: transparent;
+  padding: 9px 6px;
+  border-radius: 7px;
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 500;
+}
+.seg button[aria-selected="true"] { background: var(--raise-2); color: var(--text); }
+.section { display: flex; flex-direction: column; gap: 10px; }
+.section h2 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.section h2 small {
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 400;
+  color: var(--faint);
+}
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--raise);
+  cursor: pointer;
+  font-size: 13px;
+}
+.chip:hover { border-color: var(--accent); }
+.chip[aria-pressed="true"] { border-color: var(--accent); background: rgba(138, 184, 255, 0.14); color: #d5e5ff; }
+.note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.note.warn { color: var(--warn); }
+.note.okay { color: var(--ok); }
+.note em { font-family: var(--f-display); font-size: 1.08em; }
+
+/* Circle cards */
+.circle-list { display: flex; flex-direction: column; gap: 8px; }
+.circle-card {
+  border: 1px solid var(--line-soft);
+  border-left: 3px solid var(--c);
+  background: var(--raise);
+  border-radius: var(--r-sm);
+  padding: 8px 10px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  --thumb: var(--c);
+}
+.circle-card.off { opacity: 0.5; }
+.cc-head { display: flex; align-items: center; gap: 8px; min-height: 28px; }
+.cc-name { font-weight: 600; font-size: 13px; flex: 1; }
+.toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); cursor: pointer; }
+.toggle input { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; }
+.icon-btn {
+  width: 28px; height: 28px;
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  display: grid; place-items: center;
+}
+.icon-btn:hover:not(:disabled) { border-color: var(--line); color: var(--text); }
+.icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.ctl {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr) 86px;
+  align-items: center;
+  gap: 8px;
+}
+.ctl label { font-size: 12px; color: var(--muted); }
+.num-wrap {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--ink);
+  padding-right: 6px;
+}
+.num-wrap input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 4px 4px 4px 7px;
+  font-family: var(--f-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.num-wrap input:focus { outline: none; }
+.num-wrap:focus-within { border-color: var(--accent); }
+.num-wrap .unit { font-size: 11px; color: var(--faint); font-family: var(--f-mono); }
+
+/* Toggles grid */
+.toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+.toggles label { font-size: 13px; color: var(--text); }
+.toggles label.disabled { opacity: 0.4; }
+
+/* Components */
+.quick { display: flex; flex-wrap: wrap; gap: 6px; }
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.stat {
+  background: var(--raise);
+  border-radius: var(--r-sm);
+  padding: 8px 10px;
+}
+.stat .k { font-size: 11px; color: var(--muted); }
+.stat .v { font-family: var(--f-mono); font-size: 15px; font-variant-numeric: tabular-nums; }
+.bar { height: 4px; border-radius: 2px; background: var(--line); margin-top: 6px; overflow: hidden; }
+.bar span { display: block; height: 100%; background: var(--trace); width: 0; }
+
+/* Math */
+details.box {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  background: var(--raise);
+}
+details.box > summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  list-style-position: inside;
+}
+details.box > .body { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 10px; }
+.formula {
+  font-family: var(--f-display);
+  font-size: 17px;
+  line-height: 1.75;
+  overflow-x: auto;
+  background: var(--ink);
+  border-radius: var(--r-sm);
+  padding: 8px 10px;
+  max-height: 210px;
+}
+.formula .term { white-space: nowrap; }
+.formula sup { font-size: 0.68em; }
+.formula .more { color: var(--muted); font-size: 0.88em; }
+.math { font-family: var(--f-display); font-style: italic; font-size: 1.08em; }
+.howto { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 7px; color: var(--muted); font-size: 13px; }
+.howto b { color: var(--text); font-weight: 600; }
+details.inner > summary { cursor: pointer; font-size: 13px; color: var(--accent); }
+details.inner > div { margin-top: 8px; font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
+.big-formula { font-family: var(--f-display); font-size: 20px; color: var(--text); text-align: center; padding: 4px 0; }
+
+/* Modal + toast */
+.modal {
+  position: fixed; inset: 0;
+  background: rgba(4, 6, 10, 0.78);
+  display: grid; place-items: center;
+  padding: 16px;
+  z-index: 50;
+}
+.modal-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 14px;
+  max-width: min(720px, 100%);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.modal-card img { border-radius: var(--r-sm); max-height: 60vh; width: auto; align-self: center; }
+.modal-card .row { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  background: var(--raise-2);
+  border: 1px solid var(--line);
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  z-index: 60;
+}
+
+@media (max-width: 1100px) {
+  .main { grid-template-columns: minmax(0, 1fr) 340px; }
+}
+@media (max-width: 900px) {
+  html, body { height: auto; }
+  .app { height: auto; display: block; }
+  .main { display: block; }
+  .stage-col {
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .stage { height: min(68vh, 620px); min-height: 340px; }
+  .panel {
+    border-left: 0;
+    border-top: 1px solid var(--line-soft);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    overflow: visible;
+  }
+}
+@media (max-width: 420px) {
+  .ctl { grid-template-columns: 62px minmax(0, 1fr) 78px; }
+  .toggles { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+</style>
+
+<div class="app">
+  <header class="topbar">
+    <h1 class="brand">Fourier <i>Circle</i> Studio</h1>
+    <p class="tagline">Rotating circles, added tip to tail, can trace any closed curve.</p>
+  </header>
+
+  <div class="main">
+    <section class="stage-col" aria-label="Canvas">
+      <div class="stage" id="stage">
+        <canvas id="canvas" aria-label="Epicycle canvas"></canvas>
+        <div class="hint" id="hint" hidden></div>
+        <div class="zoom">
+          <button id="zoom-in" title="Zoom in" aria-label="Zoom in"><svg viewBox="0 0 16 16" width="14" height="14"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></button>
+          <button id="zoom-out" title="Zoom out" aria-label="Zoom out"><svg viewBox="0 0 16 16" width="14" height="14"><path d="M3 8h10" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></button>
+          <button id="zoom-reset" title="Reset view" aria-label="Reset view"><svg viewBox="0 0 16 16" width="14" height="14"><path d="M2.5 6V2.5H6M13.5 6V2.5H10M2.5 10v3.5H6M13.5 10v3.5H10" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <div class="zlabel" id="zoom-label">100%</div>
+        </div>
+        <div class="readout" id="readout"></div>
+      </div>
+
+      <div class="transport" id="transport">
+        <div class="tgroup">
+          <button class="btn primary" id="play" aria-label="Pause"></button>
+          <button class="btn" id="restart" title="Start again from t = 0 with an empty trail">
+            <svg viewBox="0 0 16 16"><path d="M3 3v4h4M3.6 7A5 5 0 1 1 4 11" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Restart</button>
+          <button class="btn" id="clear-trail" title="Erase the trail; the circles keep turning">Clear trail</button>
+        </div>
+        <div class="slider-field" id="scrub-field">
+          <label for="scrub">Timeline</label>
+          <input type="range" id="scrub" min="0" max="1000" step="1" value="0">
+          <output id="scrub-out" for="scrub">t = 0.000</output>
+        </div>
+        <div class="slider-field">
+          <label for="speed">Speed</label>
+          <input type="range" id="speed" min="0" max="1000" step="1" value="589">
+          <output id="speed-out" for="speed">1.00×</output>
+        </div>
+        <button class="btn" id="export">
+          <svg viewBox="0 0 16 16"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M3 13h10" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Export PNG</button>
+      </div>
+    </section>
+
+    <aside class="panel" aria-label="Controls">
+      <div class="seg" role="tablist" aria-label="Mode">
+        <button role="tab" id="tab-build" aria-selected="true" aria-controls="pane-build">Build with Circles</button>
+        <button role="tab" id="tab-trace" aria-selected="false" aria-controls="pane-trace">Trace a Drawing</button>
+      </div>
+
+      <!-- Build mode -->
+      <div id="pane-build" role="tabpanel" aria-labelledby="tab-build" class="section" style="gap:18px">
+        <div class="section">
+          <h2>Presets</h2>
+          <div class="chips" id="presets"></div>
+          <p class="note" id="preset-note"></p>
+        </div>
+        <div class="section">
+          <h2>Circles <small id="circle-count"></small></h2>
+          <p class="note">Each circle is centered on the tip of the previous arm. Frequency is the number of full turns per cycle; a negative value turns clockwise.</p>
+          <div class="circle-list" id="circle-list"></div>
+          <div class="tgroup" style="justify-content:space-between;flex-wrap:wrap">
+            <button class="btn" id="add-circle">+ Add circle</button>
+            <label class="toggle"><input type="checkbox" id="fractional"> Allow fractional frequencies</label>
+          </div>
+          <p class="note" id="period-note" hidden></p>
+        </div>
+      </div>
+
+      <!-- Trace mode -->
+      <div id="pane-trace" role="tabpanel" aria-labelledby="tab-trace" class="section" style="gap:18px" hidden>
+        <div class="section">
+          <h2>Outline</h2>
+          <div class="chips" id="outlines"></div>
+          <p class="note" id="trace-status"></p>
+          <div class="tgroup">
+            <button class="btn" id="draw-own">Draw your own</button>
+            <button class="btn primary" id="convert" disabled>Convert to Circles</button>
+          </div>
+          <p class="note">The circles always trace a <b>closed loop</b>: after one cycle the pen returns to where it started. An open stroke gets a straight closing segment from its end back to its start, shown dashed in orange.</p>
+        </div>
+        <div class="section" id="components-section">
+          <h2>Fourier components <small id="k-label"></small></h2>
+          <div class="ctl" style="grid-template-columns:minmax(0,1fr) 86px">
+            <input type="range" id="k-range" min="0" max="1000" step="1" aria-label="Number of components">
+            <span class="num-wrap"><input type="number" id="k-num" min="1" step="1" aria-label="Number of components value"><span class="unit">of <span id="k-max">511</span></span></span>
+          </div>
+          <div class="quick" id="k-quick"></div>
+          <div class="stats">
+            <div class="stat"><div class="k">Shape energy captured</div><div class="v" id="stat-energy">–</div><div class="bar"><span id="stat-energy-bar"></span></div></div>
+            <div class="stat"><div class="k">RMS distance from outline</div><div class="v" id="stat-err">–</div><div class="k" id="stat-err-pct"></div></div>
+          </div>
+          <p class="note">Circles are added largest first. Each keeps its own signed frequency and phase from the transform; the average position <span class="math">c</span><sub>0</sub> is handled separately as the fixed starting point of the chain.</p>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Display</h2>
+        <div class="toggles">
+          <label class="toggle"><input type="checkbox" id="show-circles" checked> Circles</label>
+          <label class="toggle"><input type="checkbox" id="show-arms" checked> Arms</label>
+          <label class="toggle" id="show-outline-label"><input type="checkbox" id="show-outline" checked> Original outline</label>
+          <label class="toggle"><input type="checkbox" id="show-preview" checked> Preview of full curve</label>
+        </div>
+      </div>
+
+      <details class="box" id="math-box" open>
+        <summary>Current expression</summary>
+        <div class="body">
+          <div class="formula" id="formula"></div>
+          <details class="inner">
+            <summary>What does this formula mean?</summary>
+            <div>
+              <div class="big-formula"><i>z</i>(<i>t</i>) = Σ <i>r</i><sub><i>k</i></sub> exp(<i>i</i>(2π<i>f</i><sub><i>k</i></sub><i>t</i> + φ<sub><i>k</i></sub>))</div>
+              <p class="note">Treat the canvas as the complex plane: a point <span class="math">x + iy</span> is one complex number <span class="math">z</span>.</p>
+              <p class="note"><span class="math">r e</span><sup><i>iθ</i></sup> is an arrow of length <span class="math">r</span> pointing at angle <span class="math">θ</span>. As <span class="math">t</span> runs from 0 to 1, the angle <span class="math">2πft + φ</span> sweeps through <span class="math">f</span> full turns, starting from <span class="math">φ</span>.</p>
+              <p class="note">Adding the arrows tip to tail gives the pen position. With whole-number frequencies every arrow is back at its start when <span class="math">t = 1</span>, so the figure closes after exactly one cycle. Angles are shown in degrees here for readability.</p>
+            </div>
+          </details>
+        </div>
+      </details>
+
+      <details class="box" id="how-box">
+        <summary>How it works</summary>
+        <div class="body">
+          <ul class="howto">
+            <li><b>Radius</b> sets how strongly a circle contributes: the length of its arm.</li>
+            <li><b>Frequency</b> is the number of rotations per cycle. Its sign sets the direction: positive turns counter-clockwise, negative turns clockwise, 0 stands still.</li>
+            <li><b>Phase</b> is the angle the arm points at when <span class="math">t = 0</span>.</li>
+            <li><b>The pen position is the sum</b> of all the rotating arms, each one starting at the tip of the previous one.</li>
+            <li><b>Build with Circles</b> lets you explore sums of circular motions directly: choose the circles, see the figure.</li>
+            <li><b>Trace a Drawing</b> runs the other way. It samples your outline at evenly spaced points, then the Discrete Fourier Transform finds the circles (radius, frequency, phase) whose sum passes through those points.</li>
+            <li>Playback speed only changes how fast the clock <span class="math">t</span> runs. The figure itself depends only on the circles.</li>
+          </ul>
+        </div>
+      </details>
+    </aside>
+  </div>
+</div>
+
+<div class="modal" id="export-modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="export-title">
+    <div class="row"><strong id="export-title">Your PNG</strong><button class="btn" id="export-close">Close</button></div>
+    <p class="note">If the download did not start, right-click (or long-press) the image and choose Save Image.</p>
+    <img id="export-img" alt="Exported canvas image">
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+'use strict';
+
+// ---------- Constants ----------
+const TAU = Math.PI * 2;
+const BASE_CYCLE_SECONDS = 8;     // one cycle at 1× speed
+const SPC = 2048;                 // cached curve samples per cycle
+const N_SAMPLES = 512;            // resampled outline points fed to the DFT
+const MAX_CIRCLES = 10;
+const BUILD_EXTENT = 220;         // world half-size shown at 100% zoom
+const TRACE_EXTENT = 230;
+const TRACE_HALF_SIZE = 180;      // outlines are scaled so their larger half-dimension is this
+const SPEED_MIN = 0.1, SPEED_MAX = 5;
+const CIRCLE_COLORS = ['#5fd3ea', '#ff7eb6', '#a990ff', '#7ee08f', '#ff9f5f', '#6a95ff', '#45e0bd', '#ff6474', '#d6a4ff', '#b8e05a'];
+
+const PRESETS = [
+  { id: 'one', label: 'One circle', circles: [[150, 1, 0]],
+    note: 'A single arm of radius 150 turning once per cycle traces a circle. Try frequency 3 to lap three times, or −1 to reverse.' },
+  { id: 'ellipse', label: 'Ellipse', circles: [[120, 1, 0], [60, -1, 0]],
+    note: 'Two circles turning in opposite directions (f = 1 and f = −1). Where the arms line up the pen reaches 120 + 60 = 180; where they oppose, 120 − 60 = 60. Those are the semi-axes. Change a phase to tilt it.' },
+  { id: 'cardioid', label: 'Cardioid', circles: [[110, 1, 0], [55, 2, 0]],
+    note: 'A second circle at twice the speed and half the radius. At the cusp the two arms’ velocities cancel and the pen momentarily stops.' },
+  { id: 'trefoil', label: 'Three-lobed curve', circles: [[100, 1, 0], [100, -2, 0]],
+    note: 'Equal radii at f = 1 and f = −2. The frequency difference, 3, gives three-fold symmetry; with equal radii the curve is the three-petal rose r = cos 3θ, passing through the center.' },
+  { id: 'flower', label: 'Flower', circles: [[100, 5, 0], [100, -3, 0]],
+    note: 'Equal radii at f = 5 and f = −3 sum to 2·cos(4·2πt)·e^(i·2πt): the eight-petal rose r = cos 4θ.' },
+  { id: 'rosette', label: 'Seven-fold rosette', circles: [[110, 1, 0], [55, -6, 90], [28, 8, 0], [16, -13, 45]],
+    note: 'Four circles with f = 1, −6, 8, −13. Every frequency leaves remainder 1 when divided by 7, so shifting t by 1/7 rotates the whole figure by 1/7 of a turn: seven-fold symmetry.' },
+];
+
+const OUTLINES = [
+  { id: 'heart', label: 'Heart', closed: true, make() {
+      const p = [];
+      for (let i = 0; i < 400; i++) {
+        const s = TAU * i / 400;
+        p.push([16 * Math.sin(s) ** 3, 13 * Math.cos(s) - 5 * Math.cos(2 * s) - 2 * Math.cos(3 * s) - Math.cos(4 * s)]);
+      }
+      return p;
+    } },
+  { id: 'star', label: 'Star', closed: true, make() {
+      const p = [];
+      for (let i = 0; i < 10; i++) {
+        const a = Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 0.4 : 1;
+        p.push([r * Math.cos(a), r * Math.sin(a)]);
+      }
+      return p;
+    } },
+  { id: 'square', label: 'Square', closed: true, make: () => [[-1, 1], [1, 1], [1, -1], [-1, -1]] },
+  { id: 'spiral', label: 'Spiral (open)', closed: false, make() {
+      const p = [];
+      for (let i = 0; i <= 300; i++) {
+        const s = 4 * Math.PI * i / 300, r = 0.12 + 0.88 * s / (4 * Math.PI);
+        p.push([r * Math.cos(s), r * Math.sin(s)]);
+      }
+      return p;
+    } },
+];
+
+// ---------- State ----------
+const S = {
+  mode: 'build',
+  circles: [],
+  nextId: 1,
+  fractional: false,
+  activePreset: 'rosette',
+  trace: {
+    state: 'run',          // 'run' or 'draw'
+    outline: null,         // { name, pts (normalized world coords), open }
+    raw: [],               // stroke in progress / finished stroke in world coords
+    stroking: false,
+    coeffs: [],            // non-zero frequency terms sorted by magnitude
+    offset: { re: 0, im: 0 },
+    energy: 0,
+    size: 1,
+    K: 24,
+    activeOutline: 'heart',
+  },
+  t: 0,
+  trailStart: 0,
+  playing: true,
+  speed: 1,
+  show: { circles: true, arms: true, outline: true, preview: true },
+  zoom: 1, vx: 0, vy: 0,
+  comps: [], origin: [0, 0], period: 1, cache: null, cacheCount: 0,
+};
+
+// ---------- DOM ----------
+const $ = (id) => document.getElementById(id);
+const canvas = $('canvas');
+const ctx = canvas.getContext('2d');
+const stage = $('stage');
+let W = 0, H = 0, DPR = 1;
+
+// ---------- Math ----------
+function fmt(n, d = 0) {
+  if (Math.abs(n) < 0.5 * 10 ** -d) n = 0;
+  const s = n.toFixed(d);
+  return s.replace('-', '−');
+}
+function fmtTrim(n, d = 2) {
+  let s = Number(n.toFixed(d)).toString();
+  if (s === '-0') s = '0';
+  return s.replace('-', '−');
+}
+
+function computePeriod(comps) {
+  for (let p = 1; p <= 20; p++) {
+    if (comps.every(c => Math.abs(c.f * p - Math.round(c.f * p)) < 1e-6)) return p;
+  }
+  return 20;
+}
+
+function activeComps() {
+  if (S.mode === 'build') {
+    return S.circles.filter(c => c.on && c.r > 0).map(c => ({ r: c.r, f: c.f, phi: c.p * Math.PI / 180, color: c.color, id: c.id }));
+  }
+  const T = S.trace;
+  if (T.state !== 'run') return [];
+  const n = T.coeffs.length;
+  return T.coeffs.slice(0, T.K).map((c, i) => {
+    const u = n > 1 ? Math.log(i + 1) / Math.log(n) : 0;
+    const hue = 190 + 120 * u;
+    return { r: c.r, f: c.f, phi: c.phi, color: `hsl(${hue.toFixed(0)} 85% ${(70 - 10 * u).toFixed(0)}%)` };
+  });
+}
+
+// Evaluate the curve over one full closing period using rotation recurrences.
+function computeCache() {
+  const P = S.period;
+  const M = SPC * P;
+  const arr = new Float64Array(2 * M);
+  const [ox, oy] = S.origin;
+  for (let j = 0; j < M; j++) { arr[2 * j] = ox; arr[2 * j + 1] = oy; }
+  for (const c of S.comps) {
+    const d = TAU * c.f / SPC;
+    const cd = Math.cos(d), sd = Math.sin(d);
+    let x = c.r * Math.cos(c.phi), y = c.r * Math.sin(c.phi);
+    for (let j = 0; j < M; j++) {
+      if ((j & 255) === 0) { // re-anchor periodically to avoid drift
+        const a = d * j + c.phi;
+        x = c.r * Math.cos(a); y = c.r * Math.sin(a);
+      }
+      arr[2 * j] += x; arr[2 * j + 1] += y;
+      const nx = x * cd - y * sd;
+      y = x * sd + y * cd; x = nx;
+    }
+  }
+  S.cache = arr; S.cacheCount = M;
+}
+
+function evalAt(t) {
+  let x = S.origin[0], y = S.origin[1];
+  for (const c of S.comps) {
+    const a = TAU * c.f * t + c.phi;
+    x += c.r * Math.cos(a); y += c.r * Math.sin(a);
+  }
+  return [x, y];
+}
+
+function normalize(pts) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const [x, y] of pts) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  const half = Math.max(maxX - minX, maxY - minY) / 2 || 1;
+  const k = TRACE_HALF_SIZE / half;
+  return pts.map(([x, y]) => [(x - cx) * k, (y - cy) * k]);
+}
+
+function dedupe(pts) {
+  const out = [];
+  for (const p of pts) {
+    const q = out[out.length - 1];
+    if (!q || Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-9) out.push(p);
+  }
+  if (out.length > 1) {
+    const a = out[0], b = out[out.length - 1];
+    if (Math.hypot(a[0] - b[0], a[1] - b[1]) < 1e-9) out.pop();
+  }
+  return out;
+}
+
+// Evenly spaced points along the closed polyline (closing segment included).
+function resample(pts, N) {
+  const n = pts.length;
+  const seg = new Float64Array(n);
+  let L = 0;
+  for (let i = 0; i < n; i++) {
+    const a = pts[i], b = pts[(i + 1) % n];
+    seg[i] = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    L += seg[i];
+  }
+  const out = [];
+  let i = 0, acc = 0;
+  for (let k = 0; k < N; k++) {
+    const s = k * L / N;
+    while (i < n - 1 && acc + seg[i] < s) { acc += seg[i]; i++; }
+    const a = pts[i], b = pts[(i + 1) % n];
+    const u = seg[i] > 0 ? Math.min(1, (s - acc) / seg[i]) : 0;
+    out.push([a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u]);
+  }
+  return out;
+}
+
+// X_k = (1/N) Σ z_n e^{-2πi k n / N},  k = −N/2 … N/2 − 1, so z_n = Σ X_k e^{2πi k n / N}.
+function dft(z) {
+  const N = z.length;
+  const cosT = new Float64Array(N), sinT = new Float64Array(N);
+  for (let m = 0; m < N; m++) { cosT[m] = Math.cos(TAU * m / N); sinT[m] = Math.sin(TAU * m / N); }
+  const out = [];
+  for (let k = -N / 2; k < N / 2; k++) {
+    let re = 0, im = 0;
+    const kk = ((k % N) + N) % N;
+    for (let n = 0; n < N; n++) {
+      const m = (kk * n) % N;
+      const c = cosT[m], s = sinT[m];
+      const x = z[n][0], y = z[n][1];
+      re += x * c + y * s;
+      im += y * c - x * s;
+    }
+    re /= N; im /= N;
+    out.push({ f: k, re, im, r: Math.hypot(re, im), phi: Math.atan2(im, re) });
+  }
+  return out;
+}
+
+// ---------- Rebuild after any setting change ----------
+function rebuild({ keepTrail = false } = {}) {
+  S.comps = activeComps();
+  S.origin = S.mode === 'trace' ? [S.trace.offset.re, S.trace.offset.im] : [0, 0];
+  S.period = computePeriod(S.comps);
+  computeCache();
+  if (!keepTrail) S.trailStart = S.t;
+  renderFormula();
+  renderTraceStats();
+  $('period-note').hidden = !(S.mode === 'build' && S.fractional);
+  $('period-note').textContent = S.period === 1
+    ? 'All frequencies are whole numbers, so the figure closes after 1 cycle.'
+    : `With these frequencies the figure closes after ${S.period} cycles (the smallest whole number of cycles that makes every frequency × cycles a whole number). The timeline now spans ${S.period} cycles.`;
+}
+
+// ---------- View transform ----------
+function extent() {
+  if (S.mode === 'build') {
+    const sum = S.circles.filter(c => c.on).reduce((a, c) => a + Math.abs(c.r), 0);
+    return Math.max(BUILD_EXTENT, sum * 1.04);
+  }
+  return TRACE_EXTENT;
+}
+function scale() { return Math.max(1e-3, (Math.min(W, H) / 2 - 10) / extent() * S.zoom); }
+function toScreen(x, y, s = scale()) { return [W / 2 + (x - S.vx) * s, H / 2 - (y - S.vy) * s]; }
+function toWorld(px, py, s = scale()) { return [(px - W / 2) / s + S.vx, -(py - H / 2) / s + S.vy]; }
+function resetView() { S.zoom = 1; S.vx = 0; S.vy = 0; updateZoomLabel(); }
+function zoomBy(f, px = W / 2, py = H / 2) {
+  const before = toWorld(px, py);
+  S.zoom = Math.min(40, Math.max(0.15, S.zoom * f));
+  const after = toWorld(px, py);
+  S.vx += before[0] - after[0];
+  S.vy += before[1] - after[1];
+  updateZoomLabel();
+}
+function updateZoomLabel() { $('zoom-label').textContent = Math.round(S.zoom * 100) + '%'; }
+
+// ---------- Canvas sizing ----------
+function resize() {
+  const r = stage.getBoundingClientRect();
+  DPR = Math.min(window.devicePixelRatio || 1, 3);
+  W = Math.max(1, r.width); H = Math.max(1, r.height);
+  canvas.width = Math.round(W * DPR);
+  canvas.height = Math.round(H * DPR);
+  draw();
+}
+new ResizeObserver(resize).observe(stage);
+
+// ---------- Drawing ----------
+function drawGrid(s) {
+  const steps = [5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000];
+  const step = steps.find(v => v * s >= 34) || 5000;
+  const [x0, y1] = toWorld(0, 0, s), [x1, y0] = toWorld(W, H, s);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(140, 165, 215, 0.06)';
+  ctx.beginPath();
+  for (let x = Math.ceil(x0 / step) * step; x <= x1; x += step) {
+    const px = Math.round(toScreen(x, 0, s)[0]) + 0.5; ctx.moveTo(px, 0); ctx.lineTo(px, H);
+  }
+  for (let y = Math.ceil(y0 / step) * step; y <= y1; y += step) {
+    const py = Math.round(toScreen(0, y, s)[1]) + 0.5; ctx.moveTo(0, py); ctx.lineTo(W, py);
+  }
+  ctx.stroke();
+  const [ax, ay] = toScreen(0, 0, s);
+  ctx.strokeStyle = 'rgba(140, 165, 215, 0.15)';
+  ctx.beginPath();
+  ctx.moveTo(Math.round(ax) + 0.5, 0); ctx.lineTo(Math.round(ax) + 0.5, H);
+  ctx.moveTo(0, Math.round(ay) + 0.5); ctx.lineTo(W, Math.round(ay) + 0.5);
+  ctx.stroke();
+}
+
+function polyline(pts, s, close) {
+  ctx.beginPath();
+  pts.forEach((p, i) => { const [x, y] = toScreen(p[0], p[1], s); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+  if (close) ctx.closePath();
+}
+
+function drawClosingGap(pts, s) {
+  if (pts.length < 2) return;
+  const a = toScreen(pts[pts.length - 1][0], pts[pts.length - 1][1], s);
+  const b = toScreen(pts[0][0], pts[0][1], s);
+  if (Math.hypot(a[0] - b[0], a[1] - b[1]) < 3) return;
+  ctx.save();
+  ctx.setLineDash([6, 5]);
+  ctx.strokeStyle = '#ff9a6b';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#ff9a6b';
+  ctx.beginPath(); ctx.arc(b[0], b[1], 4, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(a[0], a[1], 4, 0, TAU); ctx.fill();
+  ctx.restore();
+}
+
+function cachePoint(j) {
+  const M = S.cacheCount;
+  const k = ((j % M) + M) % M;
+  return [S.cache[2 * k], S.cache[2 * k + 1]];
+}
+
+function tracePath(a, b, s) {
+  // path of the pen from time a to b (b − a < period)
+  ctx.beginPath();
+  let p = toScreen(...evalAt(a), s);
+  ctx.moveTo(p[0], p[1]);
+  for (let j = Math.ceil(a * SPC); j <= Math.floor(b * SPC); j++) {
+    p = toScreen(...cachePoint(j), s); ctx.lineTo(p[0], p[1]);
+  }
+  p = toScreen(...evalAt(b), s); ctx.lineTo(p[0], p[1]);
+}
+
+function fullCurvePath(s) {
+  ctx.beginPath();
+  for (let j = 0; j < S.cacheCount; j++) {
+    const p = toScreen(S.cache[2 * j], S.cache[2 * j + 1], s);
+    j ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]);
+  }
+  ctx.closePath();
+}
+
+function draw() {
+  if (!W) return;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = '#0b0f18';
+  ctx.fillRect(0, 0, W, H);
+  const s = scale();
+  drawGrid(s);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+  const T = S.trace;
+  if (S.mode === 'trace' && T.state === 'draw') {
+    if (T.raw.length > 1) {
+      ctx.strokeStyle = '#e3e8f2'; ctx.lineWidth = 2.2;
+      polyline(T.raw, s, false); ctx.stroke();
+      drawClosingGap(T.raw, s);
+    } else if (T.raw.length === 1) {
+      const p = toScreen(T.raw[0][0], T.raw[0][1], s);
+      ctx.fillStyle = '#e3e8f2'; ctx.beginPath(); ctx.arc(p[0], p[1], 2, 0, TAU); ctx.fill();
+    }
+    return;
+  }
+
+  // Original outline
+  if (S.mode === 'trace' && T.outline && S.show.outline) {
+    ctx.strokeStyle = 'rgba(227, 232, 242, 0.42)'; ctx.lineWidth = 1.5;
+    polyline(T.outline.pts, s, !T.outline.open); ctx.stroke();
+    if (T.outline.open) drawClosingGap(T.outline.pts, s);
+  }
+
+  if (!S.comps.length && S.mode === 'build') {
+    // Nothing enabled: the pen rests at the origin
+    const p = toScreen(0, 0, s);
+    ctx.fillStyle = '#ffd166'; ctx.beginPath(); ctx.arc(p[0], p[1], 4, 0, TAU); ctx.fill();
+    return;
+  }
+
+  // Faint preview of the complete curve
+  if (S.show.preview) {
+    ctx.strokeStyle = 'rgba(255, 209, 102, 0.2)'; ctx.lineWidth = 1.2;
+    fullCurvePath(s); ctx.stroke();
+  }
+
+  // Trail
+  const a = S.trailStart, b = S.t;
+  if (b > a) {
+    if (b - a >= S.period - 1e-9) fullCurvePath(s); else tracePath(a, b, s);
+    ctx.strokeStyle = 'rgba(255, 209, 102, 0.16)'; ctx.lineWidth = 7; ctx.stroke();
+    ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2.2; ctx.stroke();
+  }
+
+  // Epicycles
+  let x = S.origin[0], y = S.origin[1];
+  const t = S.t;
+  const n = S.comps.length;
+  if (S.mode === 'trace') {
+    const o = toScreen(x, y, s);
+    ctx.strokeStyle = 'rgba(227, 232, 242, 0.5)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(o[0] - 5, o[1]); ctx.lineTo(o[0] + 5, o[1]); ctx.moveTo(o[0], o[1] - 5); ctx.lineTo(o[0], o[1] + 5); ctx.stroke();
+  }
+  for (let i = 0; i < n; i++) {
+    const c = S.comps[i];
+    const ang = TAU * c.f * t + c.phi;
+    const nx = x + c.r * Math.cos(ang), ny = y + c.r * Math.sin(ang);
+    const p = toScreen(x, y, s), q = toScreen(nx, ny, s);
+    const sr = c.r * s;
+    const fade = S.mode === 'trace' ? Math.max(0.18, 0.6 - 0.42 * i / Math.max(1, n)) : 0.6;
+    if (S.show.circles && sr > 0.7) {
+      ctx.globalAlpha = fade;
+      ctx.strokeStyle = c.color; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(p[0], p[1], sr, 0, TAU); ctx.stroke();
+    }
+    if (S.show.arms && sr > 0.3) {
+      ctx.globalAlpha = S.mode === 'trace' ? Math.max(0.45, fade + 0.3) : 0.95;
+      ctx.strokeStyle = c.color; ctx.lineWidth = S.mode === 'trace' ? 1.3 : 2;
+      ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
+      if (S.mode === 'build') { ctx.fillStyle = c.color; ctx.beginPath(); ctx.arc(p[0], p[1], 2.6, 0, TAU); ctx.fill(); }
+    }
+    ctx.globalAlpha = 1;
+    x = nx; y = ny;
+  }
+  // Pen
+  const pen = toScreen(x, y, s);
+  ctx.fillStyle = 'rgba(255, 209, 102, 0.25)'; ctx.beginPath(); ctx.arc(pen[0], pen[1], 9, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#ffd166'; ctx.beginPath(); ctx.arc(pen[0], pen[1], 4.5, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(pen[0], pen[1], 1.8, 0, TAU); ctx.fill();
+  S.pen = [x, y];
+}
+
+// ---------- Animation loop ----------
+let last = performance.now();
+let scrubbing = false;
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000);
+  last = now;
+  const running = !(S.mode === 'trace' && S.trace.state === 'draw');
+  if (S.playing && running && !scrubbing) {
+    S.t += dt * S.speed / BASE_CYCLE_SECONDS;
+    const P = S.period;
+    if (S.t - S.trailStart > P) S.trailStart = S.t - P;
+    if (S.t >= P) { const k = Math.floor(S.t / P) * P; S.t -= k; S.trailStart -= k; }
+  }
+  draw();
+  updateTimeUI();
+  requestAnimationFrame(frame);
+}
+
+let lastReadout = '';
+function updateTimeUI() {
+  const P = S.period;
+  const tp = ((S.t % P) + P) % P;
+  if (!scrubbing) $('scrub').value = String(Math.round(tp / P * 1000));
+  $('scrub-out').textContent = `t = ${tp.toFixed(3)}`;
+  let txt;
+  if (S.mode === 'trace' && S.trace.state === 'draw') txt = 'Drawing mode';
+  else {
+    const pen = S.pen || [0, 0];
+    txt = `t <b>${tp.toFixed(3)}</b> of ${P} cycle${P > 1 ? 's' : ''} · pen <b>(${fmt(pen[0], 1)}, ${fmt(pen[1], 1)})</b>`;
+  }
+  if (txt !== lastReadout) { $('readout').innerHTML = txt; lastReadout = txt; }
+}
+
+// ---------- Formula ----------
+function term(r, f, phiDeg, color, first) {
+  const sign = first ? '' : ' + ';
+  const fStr = f < 0 ? `(${fmtTrim(f, 2)})` : fmtTrim(f, 2);
+  const ph = fmtTrim(phiDeg, 0);
+  const phStr = phiDeg < 0 ? ` − ${ph.replace('−', '')}°` : ` + ${ph}°`;
+  return `${sign}<span class="term" style="color:${color}">${fmtTrim(r, 1)}·<i>e</i><sup><i>i</i>(2π·${fStr}<i>t</i>${phStr})</sup></span>`;
+}
+function renderFormula() {
+  const el = $('formula');
+  if (S.mode === 'build') {
+    if (!S.comps.length) { el.innerHTML = '<i>z</i>(<i>t</i>) = 0 <span class="more">(no circles enabled)</span>'; return; }
+    el.innerHTML = '<i>z</i>(<i>t</i>) = ' + S.comps.map((c, i) => term(c.r, c.f, c.p !== undefined ? c.p : c.phi * 180 / Math.PI, c.color, i === 0)).join('');
+    return;
+  }
+  const T = S.trace;
+  if (T.state !== 'run') { el.innerHTML = '<span class="more">Convert an outline to see its Fourier series.</span>'; return; }
+  const o = T.offset;
+  const c0 = `<span class="term">(${fmtTrim(o.re, 1)} ${o.im < 0 ? '−' : '+'} ${fmtTrim(Math.abs(o.im), 1)}<i>i</i>)</span>`;
+  const shown = Math.min(6, S.comps.length);
+  let html = '<i>z</i>(<i>t</i>) = ' + c0;
+  for (let i = 0; i < shown; i++) { const c = S.comps[i]; html += term(c.r, c.f, c.phi * 180 / Math.PI, c.color, false); }
+  if (S.comps.length > shown) html += ` <span class="more">+ ${S.comps.length - shown} smaller term${S.comps.length - shown > 1 ? 's' : ''}</span>`;
+  el.innerHTML = html;
+}
+
+// ---------- Build mode UI ----------
+function setCircles(list) {
+  S.circles = list.map(([r, f, p], i) => ({ id: S.nextId++, r, f, p, on: true, color: CIRCLE_COLORS[i % CIRCLE_COLORS.length] }));
+}
+function applyPreset(id) {
+  const pr = PRESETS.find(p => p.id === id);
+  setCircles(pr.circles);
+  S.activePreset = id;
+  renderPresets(); renderCircleList();
+  S.t = 0; resetView();
+  rebuild();
+}
+function renderPresets() {
+  const box = $('presets');
+  box.innerHTML = '';
+  for (const p of PRESETS) {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.textContent = p.label; b.id = 'preset-' + p.id;
+    b.setAttribute('aria-pressed', String(S.activePreset === p.id));
+    b.onclick = () => applyPreset(p.id);
+    box.appendChild(b);
+  }
+  const pr = PRESETS.find(p => p.id === S.activePreset);
+  $('preset-note').textContent = pr ? pr.note : 'Custom figure: you have changed the preset’s circles.';
+}
+function ctlRow(id, label, unit, min, max, step, value) {
+  return `<div class="ctl"><label for="${id}">${label}</label>
+    <input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${value}">
+    <span class="num-wrap"><input type="number" id="${id}-n" min="${min}" max="${max}" step="${step}" value="${value}" aria-label="${label} value"><span class="unit">${unit}</span></span></div>`;
+}
+function onCircleEdited() {
+  if (S.activePreset) { S.activePreset = null; renderPresets(); }
+  rebuild();
+}
+function renderCircleList() {
+  const list = $('circle-list');
+  list.innerHTML = '';
+  const fStep = S.fractional ? 0.1 : 1;
+  S.circles.forEach((c, idx) => {
+    const card = document.createElement('div');
+    card.className = 'circle-card' + (c.on ? '' : ' off');
+    card.style.setProperty('--c', c.color);
+    const pid = 'c' + c.id;
+    card.innerHTML = `<div class="cc-head">
+        <span class="cc-name">Circle ${idx + 1}</span>
+        <label class="toggle"><input type="checkbox" id="${pid}-on" ${c.on ? 'checked' : ''}> Enabled</label>
+        <button class="icon-btn" id="${pid}-del" aria-label="Remove circle ${idx + 1}" title="Remove circle" ${S.circles.length <= 1 ? 'disabled' : ''}>
+          <svg viewBox="0 0 16 16" width="13" height="13"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>
+      </div>
+      ${ctlRow(pid + '-r', 'Radius', '', 0, 200, 1, c.r)}
+      ${ctlRow(pid + '-f', 'Frequency', '/cyc', -12, 12, fStep, c.f)}
+      ${ctlRow(pid + '-p', 'Phase', '°', -180, 180, 1, c.p)}`;
+    list.appendChild(card);
+    const bind = (key, min, max) => {
+      const range = card.querySelector('#' + pid + '-' + key);
+      const num = card.querySelector('#' + pid + '-' + key + '-n');
+      range.addEventListener('input', () => { c[key] = Number(range.value); num.value = range.value; onCircleEdited(); });
+      num.addEventListener('input', () => {
+        if (num.value === '' || !isFinite(Number(num.value))) return;
+        let v = Math.min(max, Math.max(min, Number(num.value)));
+        if (key === 'f') v = S.fractional ? Math.round(v * 10) / 10 : Math.round(v);
+        c[key] = v; range.value = String(v); onCircleEdited();
+      });
+      num.addEventListener('change', () => { num.value = String(c[key]); });
+    };
+    bind('r', 0, 200); bind('f', -12, 12); bind('p', -180, 180);
+    card.querySelector('#' + pid + '-on').addEventListener('change', (e) => {
+      c.on = e.target.checked; card.classList.toggle('off', !c.on); onCircleEdited();
+    });
+    card.querySelector('#' + pid + '-del').addEventListener('click', () => {
+      S.circles = S.circles.filter(x => x !== c);
+      renderCircleList(); onCircleEdited();
+    });
+  });
+  $('circle-count').textContent = `${S.circles.length} of ${MAX_CIRCLES}`;
+  $('add-circle').disabled = S.circles.length >= MAX_CIRCLES;
+}
+$('add-circle').addEventListener('click', () => {
+  if (S.circles.length >= MAX_CIRCLES) return;
+  const used = new Set(S.circles.map(c => c.color));
+  const color = CIRCLE_COLORS.find(c => !used.has(c)) || CIRCLE_COLORS[S.circles.length % CIRCLE_COLORS.length];
+  const lastF = S.circles.length ? S.circles[S.circles.length - 1].f : 0;
+  const f = Math.max(-12, Math.min(12, lastF >= 0 ? -(Math.round(Math.abs(lastF)) + 1) : Math.round(Math.abs(lastF)) + 1));
+  S.circles.push({ id: S.nextId++, r: 30, f, p: 0, on: true, color });
+  renderCircleList(); onCircleEdited();
+  const list = $('circle-list'); list.lastElementChild?.scrollIntoView({ block: 'nearest' });
+});
+$('fractional').addEventListener('change', (e) => {
+  S.fractional = e.target.checked;
+  if (!S.fractional) S.circles.forEach(c => { c.f = Math.round(c.f); });
+  renderCircleList(); rebuild();
+});
+
+// ---------- Trace mode UI ----------
+function renderOutlines() {
+  const box = $('outlines');
+  box.innerHTML = '';
+  for (const o of OUTLINES) {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.textContent = o.label; b.id = 'outline-' + o.id;
+    b.setAttribute('aria-pressed', String(S.trace.state === 'run' && S.trace.activeOutline === o.id));
+    b.onclick = () => loadOutline(o.id);
+    box.appendChild(b);
+  }
+}
+function loadOutline(id) {
+  const o = OUTLINES.find(x => x.id === id);
+  S.trace.activeOutline = id;
+  convert({ name: o.label, pts: o.make(), open: !o.closed });
+}
+function strokeIsOpen(pts) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const [x, y] of pts) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
+  const diag = Math.hypot(maxX - minX, maxY - minY) || 1;
+  const a = pts[0], b = pts[pts.length - 1];
+  return Math.hypot(a[0] - b[0], a[1] - b[1]) > 0.04 * diag;
+}
+function strokeLength(pts) {
+  let L = 0;
+  for (let i = 1; i < pts.length; i++) L += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+  return L;
+}
+function strokeValid(pts) { return pts.length >= 6 && strokeLength(pts) > 40; }
+
+function convert(outline) {
+  const T = S.trace;
+  const pts = dedupe(outline.pts);
+  if (pts.length < 3) return;
+  const norm = normalize(pts);
+  const samples = resample(norm, N_SAMPLES);
+  const coeffs = dft(samples);
+  const c0 = coeffs.find(c => c.f === 0);
+  T.coeffs = coeffs.filter(c => c.f !== 0).sort((a, b) => b.r - a.r);
+  T.offset = { re: c0.re, im: c0.im };
+  T.energy = T.coeffs.reduce((a, c) => a + c.r * c.r, 0);
+  T.size = 2 * TRACE_HALF_SIZE;
+  T.outline = { name: outline.name, pts: norm, open: outline.open };
+  T.state = 'run';
+  T.raw = [];
+  T.K = Math.min(T.K, T.coeffs.length);
+  S.t = 0; S.trailStart = 0; S.playing = true;
+  resetView();
+  rebuild();
+  S.trailStart = 0;
+  syncKControls();
+  renderTraceUI();
+}
+
+function syncKControls() {
+  const T = S.trace;
+  const max = Math.max(1, T.coeffs.length || N_SAMPLES - 1);
+  $('k-max').textContent = String(max);
+  $('k-num').max = String(max);
+  $('k-num').value = String(T.K);
+  $('k-range').value = String(Math.round(Math.log(T.K) / Math.log(max) * 1000));
+  $('k-label').textContent = `${T.K} circle${T.K > 1 ? 's' : ''}`;
+  const quick = $('k-quick');
+  quick.innerHTML = '';
+  const opts = [[3, 'Simple · 3'], [10, '10'], [30, '30'], [100, '100'], [max, `All · ${max}`]];
+  for (const [k, label] of opts) {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.textContent = label;
+    b.setAttribute('aria-pressed', String(T.K === k));
+    b.onclick = () => setK(k);
+    quick.appendChild(b);
+  }
+}
+function setK(k) {
+  const T = S.trace;
+  const max = Math.max(1, T.coeffs.length);
+  T.K = Math.max(1, Math.min(max, Math.round(k)));
+  rebuild();
+  syncKControls();
+}
+$('k-range').addEventListener('input', (e) => {
+  const max = Math.max(1, S.trace.coeffs.length);
+  const k = Math.round(Math.exp(Number(e.target.value) / 1000 * Math.log(max)));
+  if (k !== S.trace.K) { S.trace.K = Math.max(1, Math.min(max, k)); rebuild(); }
+  const T = S.trace;
+  $('k-num').value = String(T.K);
+  $('k-label').textContent = `${T.K} circle${T.K > 1 ? 's' : ''}`;
+  $('k-quick').querySelectorAll('.chip').forEach(b => b.setAttribute('aria-pressed', 'false'));
+});
+$('k-range').addEventListener('change', syncKControls);
+$('k-num').addEventListener('change', (e) => { const v = Number(e.target.value); if (isFinite(v)) setK(v); else syncKControls(); });
+
+function renderTraceStats() {
+  const T = S.trace;
+  if (S.mode !== 'trace' || T.state !== 'run' || !T.energy) {
+    $('stat-energy').textContent = '–'; $('stat-err').textContent = '–'; $('stat-err-pct').textContent = '';
+    $('stat-energy-bar').style.width = '0';
+    return;
+  }
+  let kept = 0;
+  for (let i = 0; i < T.K; i++) kept += T.coeffs[i].r ** 2;
+  const frac = Math.min(1, kept / T.energy);
+  // Parseval: the mean squared distance between the outline samples and the
+  // reconstruction equals the energy of the dropped components.
+  const rms = Math.sqrt(Math.max(0, T.energy - kept));
+  $('stat-energy').textContent = (frac * 100).toFixed(frac > 0.999 ? 3 : 1) + '%';
+  $('stat-energy-bar').style.width = (frac * 100).toFixed(2) + '%';
+  $('stat-err').textContent = rms < 0.05 ? '< 0.05' : rms.toFixed(rms < 10 ? 2 : 1);
+  $('stat-err-pct').textContent = `units · ${(rms / T.size * 100).toFixed(2)}% of the outline’s size`;
+}
+
+function renderTraceUI() {
+  const T = S.trace;
+  const st = $('trace-status');
+  const drawing = T.state === 'draw';
+  $('convert').disabled = !(drawing && strokeValid(T.raw));
+  $('convert').hidden = !drawing;
+  $('draw-own').textContent = drawing ? 'Clear drawing' : 'Draw your own';
+  $('components-section').style.opacity = drawing ? '0.45' : '';
+  $('transport').classList.toggle('dim', drawing);
+  canvas.classList.toggle('drawing', drawing);
+  st.className = 'note';
+  const hint = $('hint');
+  if (drawing) {
+    if (!T.raw.length) {
+      st.textContent = 'Drag on the canvas to draw one continuous outline with your mouse, pen or finger. Lifting ends the stroke; drawing again replaces it.';
+      hint.textContent = 'Draw one continuous outline here';
+    } else if (T.stroking) {
+      st.textContent = 'Drawing… lift to finish the stroke.';
+      hint.textContent = 'Lift to finish';
+    } else if (!strokeValid(T.raw)) {
+      st.textContent = 'That stroke is too short. Draw a longer outline.';
+      st.className = 'note warn';
+      hint.textContent = 'Draw a longer outline';
+    } else if (strokeIsOpen(T.raw)) {
+      st.textContent = 'Your outline is open. The dashed orange segment shows how the loop will be closed, from the end of your stroke back to its start.';
+      st.className = 'note warn';
+      hint.textContent = 'Ready: press Convert to Circles';
+    } else {
+      st.textContent = 'Your outline is closed. Ready to convert.';
+      st.className = 'note okay';
+      hint.textContent = 'Ready: press Convert to Circles';
+    }
+    hint.hidden = S.mode !== 'trace';
+  } else {
+    hint.hidden = true;
+    if (T.outline) {
+      st.textContent = `Showing: ${T.outline.name}. Resampled to ${N_SAMPLES} evenly spaced points along its length, centered and scaled to fit.` +
+        (T.outline.open ? ' This outline is open, so the dashed segment is part of the loop the circles trace.' : '');
+    }
+  }
+  renderOutlines();
+}
+
+$('draw-own').addEventListener('click', () => {
+  const T = S.trace;
+  T.state = 'draw'; T.raw = []; T.stroking = false;
+  resetView();
+  rebuild();
+  renderTraceUI();
+});
+$('convert').addEventListener('click', () => {
+  const T = S.trace;
+  if (!strokeValid(T.raw)) return;
+  T.activeOutline = null;
+  convert({ name: 'your drawing', pts: T.raw.slice(), open: strokeIsOpen(T.raw) });
+});
+
+// ---------- Mode switch ----------
+function setMode(mode) {
+  if (S.mode === mode) return;
+  S.mode = mode;
+  $('tab-build').setAttribute('aria-selected', String(mode === 'build'));
+  $('tab-trace').setAttribute('aria-selected', String(mode === 'trace'));
+  $('pane-build').hidden = mode !== 'build';
+  $('pane-trace').hidden = mode !== 'trace';
+  $('show-outline').disabled = mode !== 'trace';
+  $('show-outline-label').classList.toggle('disabled', mode !== 'trace');
+  resetView();
+  if (mode === 'trace' && !S.trace.outline && S.trace.state === 'run') {
+    loadOutline('heart');
+  } else {
+    S.t = 0;
+    rebuild();
+    S.trailStart = 0;
+  }
+  if (mode === 'trace') renderTraceUI();
+  else { $('hint').hidden = true; $('transport').classList.remove('dim'); canvas.classList.remove('drawing'); }
+}
+$('tab-build').addEventListener('click', () => setMode('build'));
+$('tab-trace').addEventListener('click', () => setMode('trace'));
+
+// ---------- Canvas pointer: draw or pan ----------
+let pan = null;
+function localPoint(e) { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.button !== undefined && e.button > 0 && e.pointerType === 'mouse' && e.button !== 1) return;
+  const [px, py] = localPoint(e);
+  canvas.setPointerCapture(e.pointerId);
+  e.preventDefault();
+  const T = S.trace;
+  if (S.mode === 'trace' && T.state === 'draw' && e.button !== 1) {
+    T.stroking = true;
+    T.raw = [toWorld(px, py)];
+    T.lastPx = [px, py];
+    renderTraceUI();
+  } else {
+    pan = { px, py, vx: S.vx, vy: S.vy, id: e.pointerId };
+    canvas.classList.add('panning');
+  }
+});
+canvas.addEventListener('pointermove', (e) => {
+  const [px, py] = localPoint(e);
+  const T = S.trace;
+  if (T.stroking) {
+    e.preventDefault();
+    const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+    const r = canvas.getBoundingClientRect();
+    for (const ev of events) {
+      const qx = ev.clientX - r.left, qy = ev.clientY - r.top;
+      if (Math.hypot(qx - T.lastPx[0], qy - T.lastPx[1]) >= 2) {
+        T.raw.push(toWorld(qx, qy));
+        T.lastPx = [qx, qy];
+      }
+    }
+  } else if (pan && pan.id === e.pointerId) {
+    const s = scale();
+    S.vx = pan.vx - (px - pan.px) / s;
+    S.vy = pan.vy + (py - pan.py) / s;
+  }
+});
+function endPointer(e) {
+  const T = S.trace;
+  if (T.stroking) { T.stroking = false; renderTraceUI(); }
+  if (pan && pan.id === e.pointerId) { pan = null; canvas.classList.remove('panning'); }
+}
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', endPointer);
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const [px, py] = localPoint(e);
+  zoomBy(Math.exp(-e.deltaY * 0.0015), px, py);
+}, { passive: false });
+$('zoom-in').addEventListener('click', () => zoomBy(1.25));
+$('zoom-out').addEventListener('click', () => zoomBy(1 / 1.25));
+$('zoom-reset').addEventListener('click', resetView);
+
+// ---------- Transport ----------
+const ICON_PLAY = '<svg viewBox="0 0 16 16"><path d="M4.5 2.8v10.4L13 8z" fill="currentColor"/></svg>Play';
+const ICON_PAUSE = '<svg viewBox="0 0 16 16"><path d="M4.5 3h2.6v10H4.5zM8.9 3h2.6v10H8.9z" fill="currentColor"/></svg>Pause';
+function renderPlay() {
+  $('play').innerHTML = S.playing ? ICON_PAUSE : ICON_PLAY;
+  $('play').setAttribute('aria-label', S.playing ? 'Pause' : 'Play');
+}
+function togglePlay() { S.playing = !S.playing; renderPlay(); }
+$('play').addEventListener('click', togglePlay);
+$('restart').addEventListener('click', () => { S.t = 0; S.trailStart = 0; S.playing = true; renderPlay(); });
+$('clear-trail').addEventListener('click', () => { S.trailStart = S.t; });
+
+const scrub = $('scrub');
+scrub.addEventListener('pointerdown', () => { scrubbing = true; });
+window.addEventListener('pointerup', () => { scrubbing = false; });
+scrub.addEventListener('input', () => {
+  S.t = Number(scrub.value) / 1000 * S.period;
+  S.trailStart = 0; // show the figure drawn from t = 0 up to the scrubbed time
+});
+scrub.addEventListener('change', () => { scrubbing = false; });
+
+function speedFromSlider(v) { return Math.exp(Math.log(SPEED_MIN) + (Math.log(SPEED_MAX) - Math.log(SPEED_MIN)) * v / 1000); }
+function sliderFromSpeed(sp) { return Math.round((Math.log(sp) - Math.log(SPEED_MIN)) / (Math.log(SPEED_MAX) - Math.log(SPEED_MIN)) * 1000); }
+function renderSpeed() {
+  const secs = BASE_CYCLE_SECONDS / S.speed;
+  $('speed-out').textContent = `${S.speed.toFixed(2)}× · ${secs < 10 ? secs.toFixed(1) : Math.round(secs)} s`;
+  $('speed').title = `One cycle takes ${secs.toFixed(1)} seconds`;
+}
+$('speed').addEventListener('input', (e) => {
+  let sp = speedFromSlider(Number(e.target.value));
+  if (Math.abs(sp - 1) < 0.04) sp = 1;
+  S.speed = sp; renderSpeed();
+});
+
+// ---------- Display toggles ----------
+for (const key of ['circles', 'arms', 'outline', 'preview']) {
+  $('show-' + key).addEventListener('change', (e) => { S.show[key] = e.target.checked; });
+}
+
+// ---------- Keyboard ----------
+window.addEventListener('keydown', (e) => {
+  if (e.code !== 'Space') return;
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'button' || tag === 'textarea' || tag === 'summary') return;
+  e.preventDefault(); togglePlay();
+});
+
+// ---------- Export ----------
+const downloadsReady = (window.claude && typeof window.claude.use === 'function')
+  ? Promise.resolve(window.claude.use('downloads')).catch(() => null)
+  : Promise.resolve(null);
+let toastTimer = 0;
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
+}
+let exportUrl = null;
+$('export').addEventListener('click', async () => {
+  draw();
+  const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+  if (!blob) { toast('Could not create the image. Try again.'); return; }
+  const filename = S.mode === 'build' ? 'fourier-circles.png' : 'fourier-tracing.png';
+  const dl = await Promise.race([downloadsReady, new Promise(r => setTimeout(() => r(null), 1500))]);
+  if (dl) {
+    try { await dl.save({ filename, data: blob }); toast('PNG saved'); return; }
+    catch (err) {
+      const code = err && err.code;
+      if (code === 'declined') { toast('Export cancelled'); return; }
+      if (code === 'rate_limited') { toast('A save prompt is already open'); return; }
+    }
+  }
+  if (exportUrl) URL.revokeObjectURL(exportUrl);
+  exportUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = exportUrl; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  $('export-img').src = exportUrl;
+  $('export-modal').hidden = false;
+});
+$('export-close').addEventListener('click', () => { $('export-modal').hidden = true; });
+$('export-modal').addEventListener('click', (e) => { if (e.target.id === 'export-modal') $('export-modal').hidden = true; });
+
+// ---------- Start ----------
+S.speed = 1;
+$('speed').value = String(sliderFromSpeed(1));
+renderSpeed();
+renderPlay();
+$('show-outline').disabled = true;
+$('show-outline-label').classList.add('disabled');
+syncKControls();
+applyPreset('rosette');
+resize();
+requestAnimationFrame((t) => { last = t; frame(t); });
+
+// Test hook (harmless in production): exposes state for automated checks.
+window.__studio = { S, evalAt, dft, resample, setMode, applyPreset, setK, loadOutline };
+})();
+</script>
+
+</body>
+</html>
