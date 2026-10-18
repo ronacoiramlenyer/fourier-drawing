@@ -691,7 +691,8 @@ const TRACE_EXTENT = 230;
 const TRACE_HALF_SIZE = 180;      // outlines are scaled so their larger half-dimension is this
 const PHOTO_HALF_SIZE = 200;      // uploaded photos are placed to fit this half-size
 const PHOTO_MAX_PX = 420;         // photos are analysed at this resolution
-const AXIS_GAP = 36;              // world gap between the figure and the X/Y chains
+const AXIS_GAP = 56;              // world gap between the figure and the X/Y chains
+const ZONE_PAD = 16;              // padding inside each X/Y panel
 const SPEED_MIN = 0.1, SPEED_MAX = 5;
 const CIRCLE_COLORS = ['#5fd3ea', '#ff7eb6', '#a990ff', '#7ee08f', '#ff9f5f', '#6a95ff', '#45e0bd', '#ff6474', '#d6a4ff', '#b8e05a'];
 
@@ -838,6 +839,7 @@ function layoutChains() {
   const ch = S.chains;
   const off = S.mode === 'trace' ? [S.trace.offset.re, S.trace.offset.im] : [0, 0];
   S.offset = off;
+  S.zones = null;
   if (!ch.length || ch[0].kind === 'z') {
     if (ch[0]) ch[0].hub = off;
     S.cx = 0; S.cy = 0;
@@ -851,8 +853,16 @@ function layoutChains() {
   const hy = Math.max(Ry, S.mode === 'trace' ? TRACE_HALF_SIZE : 40);
   cX.hub = [off[0], off[1] + hy + AXIS_GAP + Rx];   // X chain above the figure
   cY.hub = [off[0] - hx - AXIS_GAP - Ry, off[1]];   // Y chain left of the figure
-  const minX = cY.hub[0] - Ry, maxX = off[0] + hx, minY = off[1] - hy, maxY = cX.hub[1] + Rx;
-  S.figBox = { minX: off[0] - hx, maxX, minY, maxY: off[1] + hy };
+  const m = ZONE_PAD;
+  S.figBox = { minX: off[0] - hx, maxX: off[0] + hx, minY: off[1] - hy, maxY: off[1] + hy };
+  // Three separate panels: the drawing, the left↔right (x) circles above it, the up↕down (y) circles to its left
+  const draw = { x0: off[0] - hx - m, x1: off[0] + hx + m, y0: off[1] - hy - m, y1: off[1] + hy + m };
+  S.zones = {
+    draw,
+    x: { x0: draw.x0, x1: draw.x1, y0: cX.hub[1] - Rx - m, y1: cX.hub[1] + Rx + m },
+    y: { x0: cY.hub[0] - Ry - m, x1: cY.hub[0] + Ry + m, y0: draw.y0, y1: draw.y1 },
+  };
+  const minX = S.zones.y.x0, maxX = draw.x1, minY = draw.y0, maxY = S.zones.x.y1;
   S.cx = (minX + maxX) / 2; S.cy = (minY + maxY) / 2;
   S.layoutExtent = Math.max((maxX - minX) / 2, (maxY - minY) / 2, 120) * 1.04;
 }
@@ -1070,6 +1080,41 @@ function drawPhoto(s) {
   ctx.drawImage(P.img, sx, sy, P.w * P.u * X.k * s, P.h * P.u * X.k * s);
   ctx.globalAlpha = 1;
 }
+function zoneRect(z, s) {
+  const [ax, ay] = toScreen(z.x0, z.y1, s), [bx, by] = toScreen(z.x1, z.y0, s);
+  return [ax, ay, bx - ax, by - ay];
+}
+function roundedRect(x, y, w, h, r) {
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h);
+}
+function drawZones(s) {
+  const Z = S.zones;
+  const panels = [
+    [Z.draw, 'DRAWING', 'rgba(255, 209, 102, 0.8)'],
+    [Z.x, 'LEFT ↔ RIGHT  ·  sets x', 'rgba(95, 211, 234, 0.9)'],
+    [Z.y, 'UP ↕ DOWN  ·  sets y', 'rgba(255, 126, 182, 0.9)'],
+  ];
+  for (const [z] of panels) {
+    const [x, y, w, h] = zoneRect(z, s);
+    roundedRect(x, y, w, h, 10);
+    ctx.fillStyle = z === Z.draw ? 'rgba(20, 27, 40, 0.9)' : 'rgba(17, 22, 33, 0.9)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(140, 165, 215, 0.22)'; ctx.lineWidth = 1; ctx.stroke();
+  }
+  // Grid and photo belong to the drawing panel only
+  const [dx, dy, dw, dh] = zoneRect(Z.draw, s);
+  ctx.save();
+  roundedRect(dx, dy, dw, dh, 10); ctx.clip();
+  drawPhoto(s); drawGrid(s);
+  ctx.restore();
+  ctx.font = '600 11px "IBM Plex Sans", system-ui, sans-serif';
+  for (const [z, label, color] of panels) {
+    const [x, y] = zoneRect(z, s);
+    ctx.fillStyle = color;
+    ctx.fillText(label, x + 10, y + 17);
+  }
+}
 function polyline(pts, s, close) {
   ctx.beginPath();
   pts.forEach((p, i) => { const [x, y] = toScreen(p[0], p[1], s); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
@@ -1154,8 +1199,8 @@ function draw() {
   ctx.fillStyle = '#0b0f18';
   ctx.fillRect(0, 0, W, H);
   const s = scale();
-  drawPhoto(s);
-  drawGrid(s);
+  if (S.zones) drawZones(s);
+  else { drawPhoto(s); drawGrid(s); }
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
 
   const T = S.trace;
@@ -1206,9 +1251,9 @@ function draw() {
     // Guides: a vertical line from the X tip and a horizontal line from the Y tip run
     // straight across the figure; they cross exactly at the pen.
     const pp = toScreen(pen[0], pen[1], s), px = toScreen(...tips[0], s), py = toScreen(...tips[1], s);
-    const fb = S.figBox, pad = 14 / s;
-    const vEnd = toScreen(tips[0][0], Math.min(fb.minY, pen[1]) - pad, s);
-    const hEnd = toScreen(Math.max(fb.maxX, pen[0]) + pad, tips[1][1], s);
+    const dz = S.zones.draw;
+    const vEnd = toScreen(tips[0][0], Math.min(dz.y0, pen[1]), s);
+    const hEnd = toScreen(Math.max(dz.x1, pen[0]), tips[1][1], s);
     ctx.save();
     ctx.lineWidth = 1.1;
     ctx.strokeStyle = 'rgba(95, 211, 234, 0.32)';
@@ -1222,16 +1267,6 @@ function draw() {
     ctx.beginPath(); ctx.moveTo(py[0], py[1]); ctx.lineTo(pp[0], pp[1]); ctx.stroke();
     ctx.restore();
     for (const [q, col] of [[px, '#5fd3ea'], [py, '#ff7eb6']]) { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(q[0], q[1], 3.5, 0, TAU); ctx.fill(); }
-    ctx.font = '600 12px "IBM Plex Mono", ui-monospace, monospace';
-    ctx.fillStyle = 'rgba(95, 211, 234, 0.9)';
-    const hx = toScreen(...S.chains[0].hub, s), hy = toScreen(...S.chains[1].hub, s);
-    const rx = sumR(S.chains[0]) * s, ry = sumR(S.chains[1]) * s;
-    ctx.textAlign = 'center';
-    ctx.fillText('x chain', hx[0], hx[1] - rx - 10);
-    ctx.fillStyle = 'rgba(255, 126, 182, 0.9)';
-    ctx.textAlign = 'right';
-    ctx.fillText('y chain', hy[0] - ry - 10, hy[1] + 4);
-    ctx.textAlign = 'left';
   }
   const p = toScreen(pen[0], pen[1], s);
   ctx.fillStyle = 'rgba(255, 209, 102, 0.25)'; ctx.beginPath(); ctx.arc(p[0], p[1], 9, 0, TAU); ctx.fill();
@@ -1359,8 +1394,8 @@ function onCircleEdited() {
 function circleGroups() {
   if (S.axes === 'complex') return [{ key: 'circles', prefix: 'Circle ', max: MAX_CIRCLES }];
   return [
-    { key: 'circlesX', prefix: 'X', max: MAX_AXIS_CIRCLES, title: 'X axis · top chain', sub: 'x(t) = Σ r·cos(2πft + φ)', colorOffset: 0 },
-    { key: 'circlesY', prefix: 'Y', max: MAX_AXIS_CIRCLES, title: 'Y axis · left chain', sub: 'y(t) = Σ r·sin(2πft + φ)', colorOffset: 1 },
+    { key: 'circlesX', prefix: 'X', max: MAX_AXIS_CIRCLES, title: 'Left ↔ right circles (x)', sub: 'x(t) = Σ r·cos(2πft + φ)', colorOffset: 0 },
+    { key: 'circlesY', prefix: 'Y', max: MAX_AXIS_CIRCLES, title: 'Up ↕ down circles (y)', sub: 'y(t) = Σ r·sin(2πft + φ)', colorOffset: 1 },
   ];
 }
 function renderCircleGroups() {
@@ -1453,7 +1488,7 @@ function renderAxesUI() {
   $('axes-xy').setAttribute('aria-checked', String(S.axes === 'xy'));
   $('axes-note').innerHTML = S.axes === 'complex'
     ? 'One chain of rotating arrows in the complex plane. The pen is the tip of the chain.'
-    : 'Two independent chains. The top chain sets the pen’s <b>x</b>, the left chain sets its <b>y</b>. A vertical line from the top chain and a horizontal line from the left chain cross exactly at the pen. Unequal frequencies on the two axes make Lissajous figures.';
+    : 'Two sets of circles, each in its own panel, separate from the drawing. The <b>left ↔ right</b> set above the drawing sets the pen’s x; the <b>up ↕ down</b> set to its left sets y. A vertical line from the top chain and a horizontal line from the left chain cross exactly at the pen. Unequal frequencies on the two axes make Lissajous figures.';
 }
 function setAxes(a) {
   if (S.axes === a) return;
