@@ -1,0 +1,163 @@
+  <div class="main">
+    <section class="stage-col" aria-label="Canvas">
+      <div class="stage" id="stage">
+        <canvas id="canvas" aria-label="Epicycle canvas"></canvas>
+        <div class="hint" id="hint" hidden></div>
+        <div class="zoom">
+          <button id="zoom-in" title="Zoom in" aria-label="Zoom in"><svg viewBox="0 0 16 16" width="14" height="14"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></button>
+          <button id="zoom-out" title="Zoom out" aria-label="Zoom out"><svg viewBox="0 0 16 16" width="14" height="14"><path d="M3 8h10" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></button>
+          <button id="zoom-reset" title="Reset view" aria-label="Reset view"><svg viewBox="0 0 16 16" width="14" height="14"><path d="M2.5 6V2.5H6M13.5 6V2.5H10M2.5 10v3.5H6M13.5 10v3.5H10" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <div class="zlabel" id="zoom-label">100%</div>
+        </div>
+        <div class="readout" id="readout"></div>
+      </div>
+
+      <div class="transport" id="transport">
+        <div class="tgroup">
+          <button class="btn primary" id="play" aria-label="Pause"></button>
+          <button class="btn" id="restart" title="Start again from t = 0 with an empty trail">
+            <svg viewBox="0 0 16 16"><path d="M3 3v4h4M3.6 7A5 5 0 1 1 4 11" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Restart</button>
+          <button class="btn" id="clear-trail" title="Erase the trail; the circles keep turning">Clear trail</button>
+        </div>
+        <div class="slider-field" id="scrub-field">
+          <label for="scrub">Timeline</label>
+          <input type="range" id="scrub" min="0" max="1000" step="1" value="0">
+          <output id="scrub-out" for="scrub">t = 0.000</output>
+        </div>
+        <div class="slider-field">
+          <label for="speed">Speed</label>
+          <input type="range" id="speed" min="0" max="1000" step="1" value="589">
+          <output id="speed-out" for="speed">1.00×</output>
+        </div>
+        <button class="btn" id="export">
+          <svg viewBox="0 0 16 16"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M3 13h10" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Export PNG</button>
+      </div>
+    </section>
+
+    <aside class="panel" aria-label="Controls">
+      <div class="seg" role="tablist" aria-label="Mode">
+        <button role="tab" id="tab-build" aria-selected="true" aria-controls="pane-build">Build with Circles</button>
+        <button role="tab" id="tab-trace" aria-selected="false" aria-controls="pane-trace">Trace a Drawing</button>
+      </div>
+
+      <div class="section">
+        <h2>Circle layout</h2>
+        <div class="seg small" role="radiogroup" aria-label="Circle layout">
+          <button role="radio" id="axes-complex" aria-checked="true">One chain (complex plane)</button>
+          <button role="radio" id="axes-xy" aria-checked="false">Separate X and Y</button>
+        </div>
+        <p class="note" id="axes-note"></p>
+      </div>
+
+      <!-- Build mode -->
+      <div id="pane-build" role="tabpanel" aria-labelledby="tab-build" class="section" style="gap:18px">
+        <div class="section">
+          <h2>Presets</h2>
+          <div class="chips" id="presets"></div>
+          <p class="note" id="preset-note"></p>
+        </div>
+        <div class="section">
+          <h2>Circles <small id="circle-count"></small></h2>
+          <p class="note">Each circle is centered on the tip of the previous arm. Frequency is the number of full turns per cycle; a negative value turns clockwise.</p>
+          <div class="section" id="circle-groups" style="gap:16px"></div>
+          <label class="toggle"><input type="checkbox" id="fractional"> Allow fractional frequencies</label>
+          <p class="note" id="period-note" hidden></p>
+        </div>
+      </div>
+
+      <!-- Trace mode -->
+      <div id="pane-trace" role="tabpanel" aria-labelledby="tab-trace" class="section" style="gap:18px" hidden>
+        <div class="section">
+          <h2>Outline</h2>
+          <div class="chips" id="outlines"></div>
+          <p class="note" id="trace-status"></p>
+          <div class="tgroup">
+            <button class="btn" id="draw-own">Draw your own</button>
+            <button class="btn primary" id="convert" disabled>Convert to Circles</button>
+          </div>
+          <p class="note">The circles always trace a <b>closed loop</b>: after one cycle the pen returns to where it started. An open stroke gets a straight closing segment from its end back to its start, shown dashed in orange.</p>
+        </div>
+        <div class="section">
+          <h2>Trace a real object</h2>
+          <p class="note">Upload a photo of an object on a plain, contrasting background. The app finds the object’s outer edge and draws it in white over the photo. Adjust the threshold until the outline hugs the object, then convert. You can also trace over the photo by hand. On a phone or tablet, the picker can take a new photo.</p>
+          <div class="tgroup" style="flex-wrap:wrap">
+            <label class="btn" for="photo-input" id="photo-pick">Choose photo…</label>
+            <input type="file" id="photo-input" accept="image/*" hidden>
+            <button class="btn" id="photo-redetect" hidden>Use detected outline</button>
+            <button class="btn" id="photo-remove" hidden>Remove photo</button>
+          </div>
+          <div class="section" id="photo-controls" hidden>
+            <div class="ctl" style="grid-template-columns:74px minmax(0,1fr) 86px">
+              <label for="photo-thr">Threshold</label>
+              <input type="range" id="photo-thr" min="1" max="254" step="1" value="128">
+              <span class="num-wrap"><input type="number" id="photo-thr-n" min="1" max="254" step="1" value="128" aria-label="Threshold value"><span class="unit"></span></span>
+            </div>
+            <div class="tgroup" style="flex-wrap:wrap"><span class="note">Object is</span>
+              <div class="chips" id="photo-polarity">
+                <button class="chip" data-pol="auto" aria-pressed="true">Auto</button>
+                <button class="chip" data-pol="dark" aria-pressed="false">Darker than background</button>
+                <button class="chip" data-pol="light" aria-pressed="false">Lighter</button>
+              </div>
+            </div>
+          </div>
+          <p class="note" id="photo-status">You can also drop or paste an image onto the canvas.</p>
+        </div>
+        <div class="section" id="components-section">
+          <h2>Fourier components <small id="k-label"></small></h2>
+          <div class="ctl" style="grid-template-columns:minmax(0,1fr) 86px">
+            <input type="range" id="k-range" min="0" max="1000" step="1" aria-label="Number of components">
+            <span class="num-wrap"><input type="number" id="k-num" min="1" step="1" aria-label="Number of components value"><span class="unit">of <span id="k-max">511</span></span></span>
+          </div>
+          <div class="quick" id="k-quick"></div>
+          <div class="stats">
+            <div class="stat"><div class="k">Shape energy captured</div><div class="v" id="stat-energy">–</div><div class="bar"><span id="stat-energy-bar"></span></div></div>
+            <div class="stat"><div class="k">RMS distance from outline</div><div class="v" id="stat-err">–</div><div class="k" id="stat-err-pct"></div></div>
+          </div>
+          <p class="note">Circles are added largest first. Each keeps its own signed frequency and phase from the transform; the average position <span class="math">c</span><sub>0</sub> is handled separately as the fixed starting point of the chain.</p>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Display</h2>
+        <div class="toggles">
+          <label class="toggle"><input type="checkbox" id="show-circles" checked> Circles</label>
+          <label class="toggle"><input type="checkbox" id="show-arms" checked> Arms</label>
+          <label class="toggle" id="show-outline-label"><input type="checkbox" id="show-outline" checked> Original outline</label>
+          <label class="toggle"><input type="checkbox" id="show-preview" checked> Preview of full curve</label>
+          <label class="toggle disabled" id="show-photo-label"><input type="checkbox" id="show-photo" checked disabled> Photo</label>
+        </div>
+      </div>
+
+      <details class="box" id="math-box" open>
+        <summary>Current expression</summary>
+        <div class="body">
+          <div class="formula" id="formula"></div>
+          <details class="inner">
+            <summary>What does this formula mean?</summary>
+            <div>
+              <div class="big-formula"><i>z</i>(<i>t</i>) = Σ <i>r</i><sub><i>k</i></sub> exp(<i>i</i>(2π<i>f</i><sub><i>k</i></sub><i>t</i> + φ<sub><i>k</i></sub>))</div>
+              <p class="note">Treat the canvas as the complex plane: a point <span class="math">x + iy</span> is one complex number <span class="math">z</span>.</p>
+              <p class="note"><span class="math">r e</span><sup><i>iθ</i></sup> is an arrow of length <span class="math">r</span> pointing at angle <span class="math">θ</span>. As <span class="math">t</span> runs from 0 to 1, the angle <span class="math">2πft + φ</span> sweeps through <span class="math">f</span> full turns, starting from <span class="math">φ</span>.</p>
+              <p class="note">Adding the arrows tip to tail gives the pen position. With whole-number frequencies every arrow is back at its start when <span class="math">t = 1</span>, so the figure closes after exactly one cycle. Angles are shown in degrees here for readability.</p>
+            </div>
+          </details>
+        </div>
+      </details>
+
+      <details class="box" id="how-box">
+        <summary>How it works</summary>
+        <div class="body">
+          <ul class="howto">
+            <li><b>Radius</b> sets how strongly a circle contributes: the length of its arm.</li>
+            <li><b>Frequency</b> is the number of rotations per cycle. Its sign sets the direction: positive turns counter-clockwise, negative turns clockwise, 0 stands still.</li>
+            <li><b>Phase</b> is the angle the arm points at when <span class="math">t = 0</span>.</li>
+            <li><b>The pen position is the sum</b> of all the rotating arms, each one starting at the tip of the previous one.</li>
+            <li><b>Separate X and Y</b> splits the work between two chains: the top chain’s tip sets the pen’s x, the left chain’s tip sets its y. Each axis is then a sum of cosine or sine waves, and unequal frequencies on the two axes give Lissajous figures.</li>
+            <li><b>Build with Circles</b> lets you explore sums of circular motions directly: choose the circles, see the figure.</li>
+            <li><b>Trace a Drawing</b> runs the other way. It samples your outline at evenly spaced points, then the Discrete Fourier Transform finds the circles (radius, frequency, phase) whose sum passes through those points.</li>
+            <li>Playback speed only changes how fast the clock <span class="math">t</span> runs. The figure itself depends only on the circles.</li>
+          </ul>
+        </div>
+      </details>
+    </aside>
+  </div>

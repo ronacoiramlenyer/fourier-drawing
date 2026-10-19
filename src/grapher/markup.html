@@ -1,0 +1,107 @@
+<div class="main g-layout">
+  <aside class="panel g-panel" aria-label="Expressions and guides">
+    <div class="g-lesson" id="g-lesson" hidden>
+      <div class="g-lesson-head">
+        <span class="g-eyebrow">Lesson</span>
+        <strong id="g-lesson-title"></strong>
+        <button class="icon-btn" id="g-lesson-close" aria-label="Close lesson" title="Close lesson">
+          <svg viewBox="0 0 16 16" width="13" height="13"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>
+      </div>
+      <p class="g-lesson-step" id="g-lesson-step"></p>
+      <div class="g-lesson-nav">
+        <button class="btn" id="g-lesson-prev">Back</button>
+        <span id="g-lesson-count"></span>
+        <button class="btn" id="g-lesson-link" hidden>Open Fourier Circle Studio</button>
+        <button class="btn primary" id="g-lesson-next">Next</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Expressions <small>Enter adds a row</small></h2>
+      <div class="g-list" id="g-list"></div>
+      <div class="tgroup" style="flex-wrap:wrap">
+        <button class="btn" id="g-add">+ Add expression</button>
+        <button class="btn" id="g-clear">Clear all</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Key points <small id="g-insight-for"></small></h2>
+      <div class="g-insights" id="g-insights"></div>
+    </div>
+
+    <div class="section">
+      <h2>Lessons <small>step-by-step</small></h2>
+      <div class="g-lessons" id="g-lessons"></div>
+    </div>
+
+    <details class="box" id="g-howto">
+      <summary>How to type math</summary>
+      <div class="body">
+        <table class="g-table">
+          <tbody>
+            <tr><td>y = 2x + 1</td><td>A graph. You can also type just <code>2x + 1</code>.</td></tr>
+            <tr><td>x^2</td><td>Powers use <code>^</code>. Write <code>x^(1/2)</code> with brackets for longer powers.</td></tr>
+            <tr><td>2x, 3sin(x)</td><td>A number next to a letter means multiply.</td></tr>
+            <tr><td>sqrt(x), abs(x), |x|</td><td>Square root and absolute value.</td></tr>
+            <tr><td>sin, cos, tan</td><td>Trig functions, in radians unless you switch on degrees.</td></tr>
+            <tr><td>ln(x), log(x), exp(x)</td><td>Natural log, base-10 log, and e<sup>x</sup>.</td></tr>
+            <tr><td>pi, e</td><td>The constants π and e.</td></tr>
+            <tr><td>a = 2</td><td>A slider. Any new letter you use can become a slider.</td></tr>
+            <tr><td>f(x) = x^2 - 3</td><td>Defines a function you can reuse: <code>y = f(x - 2)</code>.</td></tr>
+            <tr><td>(2, 3)</td><td>A point. <code>(a, b)</code> made of sliders can be dragged.</td></tr>
+            <tr><td>x = 3</td><td>A vertical line, or any graph sideways: <code>x = y^2</code>.</td></tr>
+            <tr><td>x^2 + y^2 = 9</td><td>Any equation in x and y, such as a circle.</td></tr>
+            <tr><td>(cos(t), sin(t))</td><td>A parametric curve. t runs from 0 to 2π.</td></tr>
+            <tr><td>r = 1 + cos(theta)</td><td>A polar curve. Type <code>theta</code> for θ.</td></tr>
+            <tr><td>sum(k, 1, n, 1/k)</td><td>Adds up the expression for k = 1, 2, …, n.</td></tr>
+          </tbody>
+        </table>
+        <p class="note">Under each row you see the expression written out the way it was understood, so you can check that <code>e^2x</code> means e²·x and <code>e^(2x)</code> means e to the 2x.</p>
+      </div>
+    </details>
+
+    <details class="box">
+      <summary>How to read a graph</summary>
+      <div class="body">
+        <ul class="howto">
+          <li><b>Every point has an address</b> (x, y): x is how far right of the vertical axis, y is how far above the horizontal axis.</li>
+          <li><b>A graph of y = …</b> is every point whose y equals the formula worked out at its x. Hover over a graph to read points from it.</li>
+          <li><b>Roots</b> are where a graph crosses the x-axis, so y = 0 there.</li>
+          <li><b>The y-intercept</b> is where it crosses the y-axis, at x = 0.</li>
+          <li><b>Peaks and valleys</b> (local maximum and minimum) are where the graph turns around.</li>
+          <li><b>Intersections</b> are where two graphs share a point: both formulas give the same y.</li>
+          <li><b>Moving around</b>: drag the graph to move, scroll or pinch to zoom, and click a graph to list its key points.</li>
+        </ul>
+      </div>
+    </details>
+
+    <div class="section">
+      <h2>Settings</h2>
+      <div class="toggles">
+        <label class="toggle"><input type="checkbox" id="g-grid" checked> Grid</label>
+        <label class="toggle"><input type="checkbox" id="g-numbers" checked> Axis numbers</label>
+        <label class="toggle"><input type="checkbox" id="g-deg"> Angles in degrees</label>
+        <label class="toggle"><input type="checkbox" id="g-auto-kp" checked> Show key points of selected graph</label>
+      </div>
+    </div>
+  </aside>
+
+  <section class="stage-col" aria-label="Graph">
+    <div class="stage" id="g-stage">
+      <canvas id="g-canvas" aria-label="Graph paper"></canvas>
+      <div class="zoom">
+        <button id="g-zoom-in" title="Zoom in" aria-label="Zoom in"><svg viewBox="0 0 16 16" width="14" height="14"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></button>
+        <button id="g-zoom-out" title="Zoom out" aria-label="Zoom out"><svg viewBox="0 0 16 16" width="14" height="14"><path d="M3 8h10" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></button>
+        <button id="g-home" title="Reset view" aria-label="Reset view"><svg viewBox="0 0 16 16" width="14" height="14"><path d="M2.5 7.5 8 3l5.5 4.5M4 6.5V13h8V6.5" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+      <div class="readout" id="g-readout">Hover over the graph to read coordinates</div>
+    </div>
+    <div class="transport g-bar">
+      <p class="g-tips">Drag to move · Scroll or pinch to zoom · Click a graph for its key points · Drag points made of sliders</p>
+      <button class="btn" id="g-export">
+        <svg viewBox="0 0 16 16"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M3 13h10" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Export PNG</button>
+    </div>
+  </section>
+</div>
+<div class="toast g-toast" id="g-toast" hidden><span id="g-toast-msg"></span><button class="btn" id="g-toast-undo">Undo</button></div>
